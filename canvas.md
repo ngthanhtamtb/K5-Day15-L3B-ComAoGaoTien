@@ -1,16 +1,12 @@
-# Canvas — [tên nhóm] · Track [A–F]
-
-> Điền ở guide bước 1.4. CP1 17:00 Thứ Sáu 27/11: nộp bản đầu, đủ 7 dòng (dòng 4 được ghi giả thuyết + nguồn sẽ kiểm).
-> CP2 19:30 Thứ Sáu 27/11: cập nhật (số bằng chứng đầu, lát cắt đã chốt) và điền dòng "Đã đổi gì so với CP1".
-> Track F: chép thêm thẻ đề của nhóm (khung trong file track F) xuống dưới bảng này.
+# Canvas — ComAoGaoTien · Track A
 
 | # | Dòng | Nhóm điền |
 |---|---|---|
-| 1 | Track + lát cắt dự kiến | |
-| 2 | Người dùng chính (một vai cụ thể — không phải "học viên nói chung") | |
-| 3 | Pain một câu: ai — đang làm gì — vướng đâu — hậu quả | |
-| 4 | Bằng chứng đầu — CP1: giả thuyết + nguồn sẽ kiểm · CP2: số đầu tiên + 1 trích dẫn | |
-| 5 | **Lát cắt MỘT CÂU** (1 người dùng · 1 việc · 1 quyết định AI · 1 kết quả) | |
-| 6 | AI tự làm đến đâu + 1 dòng lý do: sai thì ai chịu gì | |
-| 7 | Phân công có tên | |
+| 1 | Track + lát cắt dự kiến | **Track A · A3 Sản xuất bài giảng.** Lát cắt: giảng viên rà soát kịch bản 30–40 câu trước khi ghi hình, mỗi câu khẳng định được gắn nhãn khớp nguồn / sai hoặc mâu thuẫn nguồn / thiếu nguồn. |
+| 2 | Người dùng chính (một vai cụ thể — không phải "học viên nói chung") | Giảng viên phụ trách chuyên môn một bài pre-class của khoá AI20K, người duyệt kịch bản lời đọc do đội sản xuất bài giảng online soạn trước khi ghi hình. |
+| 3 | Pain một câu: ai — đang làm gì — vướng đâu — hậu quả | Giảng viên phụ trách bài pre-class phải rà từng câu khẳng định trong bản nháp kịch bản 30–40 câu, đối chiếu với tài liệu gốc của buổi học, nhưng bản nháp không gắn sẵn nguồn nên phải mở nhiều tài liệu tra thủ công từng câu; hậu quả là tốn nhiều thời gian mỗi bài và dễ đọc lướt bỏ sót lỗi kiến thức tinh vi hoặc số liệu lệch nguồn trước khi bài lên trang pre-class. |
+| 4 | Bằng chứng đầu — CP1: giả thuyết + nguồn sẽ kiểm · CP2: số đầu tiên + 1 trích dẫn | **Giả thuyết (chưa kiểm, chưa có số):** mỗi bài giảng viên mất ≥1 giờ tra nguồn thủ công và từng gặp ≥1 lỗi kiến thức hoặc số liệu lệch nguồn lọt qua rà soát. **Đúng nếu:** ≥2/3 người được hỏi kể được một bài cụ thể như vậy trong tháng qua. **Nguồn sẽ kiểm:** phỏng vấn ≥3 người (giảng viên, đội sản xuất bài giảng online; hẹn từ sáng Thứ Sáu 27/11) · xin 1 bài đã rà gần nhất để đếm số lỗi tìm được và thời gian tra nguồn. |
+| 5 | **Lát cắt MỘT CÂU** (1 người dùng · 1 việc · 1 quyết định AI · 1 kết quả) | Một giảng viên phụ trách bài pre-class · đưa bản nháp kịch bản 30–40 câu vào rà soát trước khi ghi hình · hệ thống đối chiếu từng câu khẳng định với bộ tài liệu gốc rồi gắn nhãn khớp nguồn (kèm mã đoạn), sai / mâu thuẫn nguồn hoặc thiếu nguồn (kèm lý do) · giảng viên chấp nhận hoặc từ chối từng chỗ bị cắm cờ để chốt bản kịch bản sạch chuyển sang ghi hình. |
+| 6 | AI tự làm đến đâu + 1 dòng lý do: sai thì ai chịu gì | AI chỉ đề xuất nhãn kèm mã đoạn và lý do, không tự sửa kịch bản, không tự xuất bản; giảng viên quyết từng chỗ. Lý do: AI bỏ sót lỗi thì bài sai kiến thức tới học viên và giảng viên chịu trách nhiệm chuyên môn, nên phải đo cả báo nhầm lẫn tỉ lệ bỏ sót. |
+| 7 | Phân công có tên | Phạm Quốc Huy: Lead, AI/Prompt, Tester · Nguyễn Thành Tâm: BA, CI/CD · Trần Bảo Long: BE, FE · Trịnh Gia Huy: Eval, Data. |
 | — | *(CP2)* Đã đổi gì so với CP1 | |
