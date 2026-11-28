@@ -376,6 +376,7 @@ function quizStart() {
       }), { spin: true }))));
 }
 function reviewGate1(kind, st, name) {
+  if (kind === "quiz") return quizGate1(st);
   const d = st.draft, items = d.items;
   if (st.sel >= items.length) st.sel = 0;
   const i = st.sel, it = items[i], lab = itemLabel(st, i), dec = st.dec[i + 1];
@@ -422,6 +423,83 @@ function reviewGate1(kind, st, name) {
         if (kind === "slide" && Object.keys(st.draft.audio_errors || {}).length) S.info = "Có slide chưa tạo được giọng đọc (lỗi mạng): " + Object.keys(st.draft.audio_errors).join(", ");
       }), { disabled: decided < items.length, spin: true })));
 }
+function quizGate1(st) {
+  const d = st.draft, items = d.items;
+  if (st.sel >= items.length) st.sel = 0;
+  const i = st.sel, it = items[i], lab = itemLabel(st, i), dec = st.dec[i + 1];
+  const decided = items.filter((_, k) => st.dec[k + 1]).length;
+  const pillCls = (k) => { const x = st.dec[k + 1]; return "quiz-pill " + (k === i ? "sel " : "") + (x ? (x.action === "accept" ? "d-ok" : x.action === "edit" ? "d-edit" : "d-rej") : ""); };
+  getSeg(it.segment_id).then(() => { if (!S._segShown || S._segShown !== it.segment_id) { S._segShown = it.segment_id; render(); } });
+  const setDec = (action, extra) => { st.dec[i + 1] = Object.assign({ action }, extra || {}); st.editing = null; if (i < items.length - 1 && action !== "edit") st.sel++; render(); };
+
+  // Xác định phương án đúng theo nguồn (nếu AI gắn SAI_NGUON và có gợi ý đáp án khác)
+  const isBad = lab && lab.nhan === "SAI_NGUON";
+  const isOk = lab && lab.nhan === "KHOP_NGUON";
+  let sourceAns = isOk ? it.dap_an : null;
+  if (isBad && lab && (lab.de_xuat_sua || lab.ly_do)) {
+    const m = (lab.de_xuat_sua + " " + (lab.ly_do || "")).match(/đáp án(?:\s+đúng)?\s*(?:là|:)?\s*\b([A-D])\b/i);
+    if (m) sourceAns = m[1].toUpperCase();
+  }
+  const doBuild = () => act(async () => {
+    const decisions = items.map((_, k) => Object.assign({ index: k + 1 }, st.dec[k + 1]));
+    const g = await api("POST", "/api/drafts/" + d.draft_id + "/gate1", { decisions });
+    st.gate1 = g.kiem_lai_muc_sua || {};
+    if (!g.draft.items.length) throw new Error("Đã bỏ hết câu, không còn gì để dựng.");
+    st.draft = await api("POST", "/api/drafts/" + d.draft_id + "/build"); st.dec = {}; st.sel = 0;
+  });
+
+  const decLabel = dec ? ({ accept: "đã đạt", edit: "đã sửa", reject: "đã bỏ" }[dec.action]) : "chưa quyết định";
+  return h("div", { class: "quiz-shell" },
+    h("div", { class: "quiz-head" },
+      h("div", {}, h("h1", {}, "Kiểm từng câu quiz"),
+        h("p", { class: "lead", style: "margin:0" }, "Bộ quiz do AI sinh. Mỗi câu được đối chiếu đáp án và các phương án nhiễu với tài liệu gốc.")),
+      h("strong", { style: "white-space:nowrap" }, "Đã kiểm " + decided + "/" + items.length)),
+    feedback(),
+    h("div", { class: "quiz-bar" },
+      h("div", { class: "quiz-pills" }, items.map((_, k) => {
+        const x = st.dec[k + 1], prefix = x && x.action === "accept" ? "✓ " : "";
+        return h("button", { class: pillCls(k), onclick: () => { st.sel = k; st.editing = null; render(); } }, prefix + "Câu " + (k + 1));
+      })),
+      busyBtn(decided < items.length ? "Tổng kết" : "Chốt & dựng PDF", doBuild, { disabled: decided < items.length, spin: true })),
+    h("div", { class: "quiz-card" },
+      h("div", { class: "quiz-meta" },
+        h("span", {}, "Câu " + (i + 1) + " / " + items.length),
+        lab ? badge(lab.nhan) : h("span", { class: "badge b-mute" }, "Chưa có nhãn riêng"),
+        h("span", {}, "Gợi ý của AI — giảng viên quyết định")),
+      st.editing === i
+        ? h("div", {}, itemForm("quiz", it), h("label", { class: "f", for: "note" }, "Ghi chú (tuỳ chọn)"), h("textarea", { id: "note", class: "short" }, (dec && dec.note) || ""),
+          h("div", { class: "row", style: "margin-top:10px" },
+            h("button", { class: "navy", onclick: () => setDec("edit", { item: readItemForm("quiz"), note: document.getElementById("note").value }) }, "Lưu sửa"),
+            h("button", { onclick: () => { st.editing = null; render(); } }, "Huỷ")))
+        : [
+          h("p", { class: "quiz-q" }, it.de),
+          h("ul", { class: "quiz-opts" }, ["A", "B", "C", "D"].map((k) => {
+            const isAi = it.dap_an === k, isRight = sourceAns === k, isWrong = isAi && isBad;
+            const cls = "quiz-opt" + (isAi ? " is-ai" : "") + (isWrong ? " is-wrong" : isRight ? " is-right" : "");
+            return h("li", { class: cls },
+              h("div", { class: "quiz-opt-l" }, h("span", { class: "quiz-opt-k" }, k), h("span", {}, (it.phuong_an || {})[k] || "")),
+              h("div", { class: "quiz-tags" },
+                isAi ? h("span", { class: "qtag qtag-ai" }, "AI chọn làm đáp án") : null,
+                isWrong ? h("span", { class: "qtag qtag-bad" }, "Mâu thuẫn nguồn") : null,
+                isRight ? h("span", { class: "qtag qtag-ok" }, "Đúng theo nguồn") : null));
+          })),
+          h("div", { class: "quiz-explain" },
+            h("div", { class: "quiz-explain-t" }, "Giải thích đi kèm (AI sinh) · Nguồn: " + (it.segment_id || "—")),
+            h("p", { style: "margin:0" }, it.giai_thich || ""),
+            lab && lab.ly_do ? h("p", { class: "hint", style: "margin-top:6px" }, "Đối chiếu nguồn: " + lab.ly_do + (lab.de_xuat_sua ? " · Đề xuất: " + lab.de_xuat_sua : "")) : null),
+          st.gate1[i + 1] ? checkBox(st.gate1[i + 1]) : null,
+        ]),
+    h("div", { class: "quiz-bottom" },
+      h("button", { disabled: i === 0, onclick: () => { st.sel--; st.editing = null; render(); } }, "‹ Câu trước"),
+      h("div", { style: "flex:1;min-width:180px" },
+        h("strong", {}, "Câu " + (i + 1) + "/" + items.length + " · " + decLabel),
+        h("div", { class: "hint", style: "margin:0" }, "Chi tiết và tài liệu tham chiếu ở icon góc phải dưới.")),
+      h("div", { class: "row" },
+        h("button", { class: "danger", disabled: S.busy, onclick: () => setDec("reject") }, "Bỏ câu"),
+        h("button", { disabled: S.busy, onclick: () => { st.editing = i; render(); } }, "⚑ Cần sửa"),
+        h("button", { class: "navy", disabled: S.busy, onclick: () => setDec("accept") }, i < items.length - 1 ? "Đạt — sang câu tiếp →" : "Đạt"))));
+}
+
 function checkBox(c) {
   return h("div", { class: "note info" }, h("strong", {}, "Kiểm lại sau khi sửa: "), (c.nhan || []).map((x) => h("div", {}, badge(x.nhan), " ", x.ly_do || "", x.de_xuat_sua ? " · Đề xuất: " + x.de_xuat_sua : "")),
     c.chen_chi_dan ? h("div", {}, "Phát hiện chỉ dẫn chèn trong nội dung sửa.") : null);
