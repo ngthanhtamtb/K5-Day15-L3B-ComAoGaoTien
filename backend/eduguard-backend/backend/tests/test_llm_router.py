@@ -109,3 +109,14 @@ def test_openai_compat_rotates_keys_on_rate_limit(monkeypatch):
     p = P.OpenAICompatProvider("groq", "https://g/v1", ["k1", "k2"])
     assert run(p.complete("m", LLMRequest(user="u"))).text == "ok"
     assert seen == ["Bearer k1", "Bearer k2"]
+
+
+def test_verify_reader_accepts_other_json_shapes():
+    from app.edu.verify.service import _rows_by_index
+    batch = [3, 4]
+    assert set(_rows_by_index({"ket_qua": [{"index": 3, "nhan": "K"}, {"index": "[4]", "nhan": "S"}]}, batch)) == {3, 4}
+    assert set(_rows_by_index({"results": [{"stt": 3}, {"stt": 4}]}, batch)) == {3, 4}
+    assert _rows_by_index([{"nhan": "A"}, {"nhan": "B"}], batch)[4]["nhan"] == "B"        # by order
+    assert set(_rows_by_index({"3": {"nhan": "K"}, "4": {"nhan": "S"}}, batch)) == {3, 4}
+    assert _rows_by_index({"nhan": "K"}, [3]) == {3: {"nhan": "K"}}
+    assert _rows_by_index([{"nhan": "A"}], batch) == {}                                   # count mismatch: no guess

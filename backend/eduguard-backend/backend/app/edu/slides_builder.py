@@ -44,16 +44,34 @@ def _load_template(template: str):
     return data["slides"], float(data.get("width", 1000)), float(data.get("height", 562.5))
 
 
-def _short(text: str, words: int = 7) -> str:
-    w = text.split()
-    return " ".join(w[:words]) + ("…" if len(w) > words else "")
+
+def _split_point(sentence: str) -> Dict[str, str]:
+    """Pasted scripts have no key points: turn one narration sentence into a short title + the rest,
+    instead of repeating the whole sentence twice on the slide."""
+    s = sentence.strip().rstrip(".")
+    words = s.split()
+    head, sep, tail = s.partition(",")
+    cap = lambda t: t[:1].upper() + t[1:]  # noqa: E731
+    if sep and 2 <= len(head.split()) <= 10 and tail.strip():
+        return {"title": head.strip(), "text": cap(tail.strip())}
+    if len(words) <= 7:
+        return {"title": s, "text": ""}
+    # subject | predicate at the first linking verb ("Giảm temperature | giúp câu trả lời …")
+    for i, w in enumerate(words[1:7], start=1):
+        if w.lower() in _LINKING:
+            return {"title": " ".join(words[:i]), "text": cap(" ".join(words[i:]))[:220]}
+    return {"title": " ".join(words[:5]) + "…", "text": cap(" ".join(words[5:]))[:220]}
+
+
+_LINKING = {"là", "giúp", "làm", "có", "được", "tính", "gồm", "cho", "sinh", "dùng", "yêu", "đưa", "truy",
+            "chia", "biểu", "nghĩa", "khiến", "tạo", "phụ", "không"}
 
 
 def _items(slide) -> List[Dict[str, str]]:
     segs = [s.text for s in slide.doan]
     if slide.y_chinh:
         return [{"title": y, "text": (segs[i] if i < len(segs) else "")[:220]} for i, y in enumerate(slide.y_chinh[:4])]
-    return [{"title": _short(t), "text": t[:220]} for t in segs[:4]] or [{"title": slide.tieu_de, "text": ""}]
+    return [_split_point(t) for t in segs[:4]] or [{"title": slide.tieu_de, "text": ""}]
 
 
 async def build_slides(sc: Script, template: str = "template_1", only_approved: bool = True) -> Dict[str, Any]:

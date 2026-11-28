@@ -124,21 +124,24 @@ async def check_items(doc: ParsedDocument, items: Sequence[str], *, quiz: bool =
                 + "\n".join(f"[{i}] {items[i]}" for i in batch)
                 + "\n\n" + (QUIZ_RULES if quiz else "") + RULES
                 + ("\nBắt buộc điền de_xuat_sua cho mọi mục SAI_NGUON." if need_fix else ""))
-        try:
-            data = await llm.complete_json("verify", SYSTEM, user, max_tokens=4096, temperature=0, plan=plan)
-        except LLMError as e:
-            logger.warning("verify batch failed: %s", e)
+        by_index: Dict[int, dict] = {}
+        error: Optional[str] = None
+        for attempt in range(2):      # models occasionally answer in another JSON shape: ask once more
+            try:
+                data = await llm.complete_json("verify", SYSTEM, user, max_tokens=4096, temperature=0, plan=plan)
+            except LLMError as e:
+                logger.warning("verify batch failed: %s", e)
+                error = str(e)
+                break
+            by_index = _rows_by_index(data, batch)
+            if by_index:
+                break
+            note("error", task="verify", message=f"phản hồi không đúng định dạng (lần {attempt + 1}): {str(data)[:160]}")
+        if error is not None:
             for i in batch:
-                results[i] = _result(i, items[i], "THIEU_NGUON", ly_do=f"Chưa kiểm được (lỗi gọi model): {str(e)[:120]}",
+                results[i] = _result(i, items[i], "THIEU_NGUON", ly_do=f"Chưa kiểm được (lỗi gọi model): {error[:120]}",
                                      extra={"loi": True})
             continue
-        rows = data.get("ket_qua", []) if isinstance(data, dict) else data if isinstance(data, list) else []
-        by_index = {}
-        for r in rows:
-            try:
-                by_index[int(r.get("index"))] = r
-            except (TypeError, ValueError, AttributeError):
-                continue
         for i in batch:
             r = by_index.get(i)
             if r is None:
@@ -158,6 +161,42 @@ async def check_items(doc: ParsedDocument, items: Sequence[str], *, quiz: bool =
                                  str(r.get("de_xuat_sua") or "") if label == "SAI_NGUON" else "",
                                  str(r.get("canh_bao_ma") or ""), extra)
     return [r for r in results if r is not None]
+
+
+_INDEX_KEYS = ("index", "i", "idx", "stt", "muc", "id")
+
+
+def _rows_by_index(data: Any, batch: Sequence[int]) -> Dict[int, dict]:
+    """Tolerant reader for the labelling JSON:
+    {"ket_qua":[…]} | any key holding a list of dicts | a bare list | {"0": {...}} ;
+    index under index/i/idx/stt/muc/id (int or "[3]"); rows without indices are matched by order
+    only when their count equals the batch size."""
+    rows: List[dict] = []
+    if isinstance(data, list):
+        rows = [r for r in data if isinstance(r, dict)]
+    elif isinstance(data, dict):
+        if isinstance(data.get("ket_qua"), list):
+            rows = [r for r in data["ket_qua"] if isinstance(r, dict)]
+        else:
+            lists = [v for v in data.values() if isinstance(v, list) and v and all(isinstance(x, dict) for x in v)]
+            if lists:
+                rows = lists[0]
+            elif all(isinstance(v, dict) for v in data.values()) and data:
+                rows = [{**v, "index": k} for k, v in data.items()]
+            elif "nhan" in data:
+                rows = [data]
+    out: Dict[int, dict] = {}
+    unindexed = []
+    for r in rows:
+        raw = next((r.get(k) for k in _INDEX_KEYS if r.get(k) is not None), None)
+        m = re.search(r"\d+", str(raw)) if raw is not None else None
+        if m and int(m.group()) in batch:
+            out[int(m.group())] = r
+        else:
+            unindexed.append(r)
+    if not out and len(unindexed) == len(batch):
+        out = dict(zip(batch, unindexed))
+    return out
 
 
 def quiz_as_text(q) -> str:
