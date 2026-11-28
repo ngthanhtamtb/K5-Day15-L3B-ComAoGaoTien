@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: smartppt
+      POSTGRES_USER: smartppt_user
+      POSTGRES_PASSWORD: smartppt_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  api:
+    build: .
+    ports:
+      - "8077:8077"
+    environment:
+      DATABASE_URL: postgresql://smartppt_user:smartppt_password@db:5432/smartppt
+      SECRET_KEY: ${SECRET_KEY}
+      FERNET_KEY: ${FERNET_KEY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+    volumes:
+      - ./data:/app/data
+    env_file: .env
+    depends_on:
+      - db
+    command: uvicorn main:app --host 0.0.0.0 --port 8077 --reload
+
+volumes:
+  postgres_data:

@@ -1,0 +1,53 @@
+# Gói người dùng — KHUNG, chưa áp dụng thật.
+# BILLING_ENFORCE=false (mặc định): mọi tính năng đều cho qua; hệ thống chỉ ghi lượng dùng theo tháng
+# và trả "quotaWarnings" khi vượt. BILLING_ENFORCE=true thì chặn thật (HTTP 402) — không cần sửa code.
+# Hạn mức để null = chưa quyết định / không giới hạn. Điền số khi có bảng giá.
+#
+# User.subscription_type (cột có sẵn của RAGslides) được map sang gói:
+aliases:
+  free: pho_thong
+  basic: pho_thong
+  premium: tra_phi
+  pro: tra_phi
+  paid: tra_phi
+
+default_plan: pho_thong
+
+plans:
+  pho_thong:
+    name: "Phổ thông"
+    price_per_month: 0
+    features:
+      ocr: false               # OCR trang scan
+      image_captions: false    # mô tả hình để tra cứu
+      voice: true
+      quiz_types: [mcq, true_false]
+      quiz_depth: false        # câu nhiều bước / tình huống / phân tích phương án nhiễu
+      export_pptx: false
+      premium_templates: false
+      llm_route: pho_thong     # xem config/llm.yaml > plans
+    quotas:                    # theo tháng
+      documents: null
+      document_pages: null
+      voice_chars: null
+      quiz_questions: null
+      llm_tokens: null
+
+  tra_phi:
+    name: "Trả phí"
+    price_per_month: null      # chưa định giá
+    features:
+      ocr: true
+      image_captions: true
+      voice: true
+      quiz_types: [mcq, true_false, short_answer]
+      quiz_depth: true
+      export_pptx: true
+      premium_templates: true
+      llm_route: tra_phi
+    quotas:
+      documents: null
+      document_pages: null
+      voice_chars: null
+      quiz_questions: null
+      llm_tokens: null

@@ -1,0 +1,117 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+
+# Environment Variables
+.env
+.env.local
+.env.*.local
+*.env
+
+# Key generation and test scripts
+generate_fernet_key.py
+test_gemini_key.py
+
+# Credentials and API Keys
+credentials*.json
+*-credentials.json
+credentials-*.json
+app/core/helpers/credentials*.json
+service-account*.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# macOS
+Icon
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+*.log
+
+# Alembic
+alembic/versions/*.pyc
+
+# Uploads and User Data
+data/uploads/*
+!data/uploads/.gitkeep
+uploads/
+*.tmp
+
+# Logs
+logs/
+*.log
+log/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Docker
+*.env.docker
+docker-compose.override.yml
+
+# Cache
+.cache/
+*.cache
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+tmp/
+temp/
+
+# OS specific
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# EduGuard runtime data: uploaded teaching documents, parsed output, audio, jobs, SQLite DB
+data/edu/
+data/*.db*

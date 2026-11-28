@@ -1,0 +1,30 @@
+# Định tuyến LLM theo việc. Mỗi việc là một chuỗi "provider:model" thử lần lượt:
+# provider chưa có key thì bỏ qua, lỗi tạm thời (429, 5xx, timeout) thì chuyển sang mục sau.
+# Provider: anthropic · gemini · openai · groq · openrouter · ollama · fake (test)
+# Key đặt trong .env: ANTHROPIC_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, GROQ_API_KEYS, OPENROUTER_API_KEY
+# {GROQ_MODEL}, {GEMINI_MODEL}: lấy từ .env (mặc định llama-3.3-70b-versatile, gemini-2.5-flash)
+
+tasks:
+  default:  [anthropic:claude-sonnet-5-5, "gemini:{GEMINI_MODEL}", "groq:{GROQ_MODEL}"]
+  generate: [anthropic:claude-sonnet-5-5, "gemini:{GEMINI_MODEL}", "groq:{GROQ_MODEL}"]   # kịch bản, slide
+  script:   [anthropic:claude-sonnet-5-5, "gemini:{GEMINI_MODEL}", "groq:{GROQ_MODEL}"]   # lời thuyết trình
+  quiz:     [anthropic:claude-sonnet-5-5, "gemini:{GEMINI_MODEL}", "groq:{GROQ_MODEL}"]
+  verify:   [anthropic:claude-haiku-5-5, "gemini:{GEMINI_MODEL}", "groq:{GROQ_MODEL}"]    # gắn nhãn KHOP/SAI/THIEU (gọi nhiều, dùng model rẻ)
+  vision:   ["gemini:{GEMINI_MODEL}", anthropic:claude-sonnet-5-5]   # OCR trang scan, mô tả hình
+  cheap:    [anthropic:claude-haiku-5-5, "groq:{GROQ_MODEL}"]
+
+# USD / 1 triệu token (input, output). Model không có giá ở đây thì chi phí hiện là "chưa rõ", không đoán.
+# Giá Claude chép từ cost/personas.yaml của repo (bảng giá BTC, xem 25/11/2026).
+pricing:
+  claude-haiku-5-5:  [0.10, 0.50]
+  claude-sonnet-5-5: [2.00, 10.00]
+  claude-opus-5-5:   [4.00, 20.00]
+  # gemini-2.5-flash: [?, ?]        # điền theo bảng giá Google khi dùng
+  # llama-3.3-70b-versatile: [?, ?] # điền theo bảng giá Groq khi dùng
+
+# Khung theo gói (chưa áp dụng thật): gói có thể đổi một việc sang route khác.
+plans:
+  pho_thong:
+    quiz: cheap
+    script: cheap
+  tra_phi: {}

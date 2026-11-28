@@ -1,0 +1,36 @@
+fastapi
+uvicorn[standard]==0.24.0
+sqlalchemy==2.0.23
+psycopg2-binary==2.9.9
+alembic==1.12.1
+pydantic==2.5.0
+pydantic[email]
+pydantic-settings==2.1.0
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
+python-multipart==0.0.6
+httpx
+pillow==10.1.0
+pycryptodome
+python-dotenv==1.0.0
+beautifulsoup4==4.13.4
+sse_starlette==2.4.1
+google-genai
+# vertexai               # optional: only for AI-generated cover images (services/ai/images.py)
+
+# ---- EduGuard extensions (app/edu) ----
+python-docx>=1.1
+lxml>=5.0
+mutagen>=1.47          # mp3 duration for narration audio
+# Optional, heavy (PyTorch): layout-model parsing (EDU_PDF_ENGINE=docling). Default is the
+# light local parser (PyMuPDF + python-pptx); nothing is sent to a remote server.
+# docling>=2.0
+
+# ---- added for the plan (local parsing, config, tests) ----
+pymupdf>=1.24          # PDF text blocks + bbox, find_tables, images (EDU_PDF_ENGINE=local)
+pdfplumber>=0.11       # table fallback for old PyMuPDF
+python-pptx>=0.6.23    # PPTX parsing (shapes, tables, pictures, speaker notes)
+pyyaml>=6.0            # config/llm.yaml, config/plans.yaml
+pytest>=8.0            # tests/
+fpdf2>=2.7            # quiz PDF (app/edu/quiz_pdf.py)
