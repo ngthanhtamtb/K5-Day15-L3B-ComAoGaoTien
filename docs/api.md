@@ -17,6 +17,7 @@ Mã đoạn dạng `D01-S02` (prototype ghi `DAY01-S02`: giao diện tự đổi
 | 3 · Tạo slide | bấm "Tạo slide" | `POST /api/drafts` `{kind:"slide", buoi, script_id, so_luong, options}` |
 | 4 · Kiểm từng slide | "Đạt" / "Cần sửa" + ghi chú | `POST /api/drafts/{id}/gate1` (`accept` / `reject` / `edit`, `note`) |
 | 4 · Kiểm từng slide | dựng slide HTML + giọng đọc | `POST /api/drafts/{id}/build` |
+| 4 · Kiểm từng slide | sinh / cập nhật giọng đọc TTS (1 slide hoặc cả bộ, đổi giọng/tốc độ, kiểm nguồn lời đọc) | `POST /api/drafts/{id}/voice` |
 | 4 · Kiểm từng slide | sửa trực tiếp, kiểm lại, đề xuất sửa | `POST /api/drafts/{id}/gate2` |
 | 4 · Kiểm từng slide | gửi chờ duyệt | `POST /api/drafts/{id}/submit` |
 | 5 · Kiểm từng câu quiz | như slide, `kind:"quiz"` (từ chủ đề hoặc `script_id`) | cùng các endpoint `/api/drafts…` |

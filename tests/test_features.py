@@ -129,5 +129,56 @@ class Signature(unittest.TestCase):
         self.assertEqual(stability.signature("[TAO_QUIZ] x", out), ("", ("D04-Q01", "D04-S02")))
 
 
+class SlideVoiceEndpoint(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        p_dir = patch.object(api, "DRAFT_DIR", self.tmp.name)
+        p_state = patch.object(api, "STATE_FILE", os.path.join(self.tmp.name, "_state.json"))
+        p_dir.start()
+        p_state.start()
+        self.addCleanup(p_dir.stop)
+        self.addCleanup(p_state.stop)
+        self.did = "draft-voice01"
+        api.DRAFTS[self.did] = {
+            "draft_id": self.did, "kind": "slide", "buoi": 1, "chu_de": "temperature",
+            "options": {"voice": "vi-VN-HoaiMyNeural", "rate": "+0%"},
+            "items": [
+                {"tieu_de": "Slide 1", "y_chinh": ["Temperature thấp giúp ổn định"], "loi_thuyet_trinh": "Temperature thấp làm phân bố nhọn hơn. [D01-S02]", "segment_id": "D01-S02"},
+                {"tieu_de": "Slide 2", "y_chinh": ["Context window 128K"], "loi_thuyet_trinh": "Context window gồm cả đầu vào và đầu ra.", "segment_id": "D01-S04"},
+            ],
+            "nhan": [], "stage": "cong_1", "status": "cho_duyet", "files": {}, "traces": [],
+        }
+        self.addCleanup(lambda: api.DRAFTS.pop(self.did, None))
+
+    def test_synthesize_single_slide_and_switch_voice(self):
+        calls = []
+
+        def fake_tts(slide_id, text, out_dir, voice="vi-VN-HoaiMyNeural", rate="+0%"):
+            calls.append((slide_id, text, voice, rate))
+            out = Path(out_dir) / f"slide_{slide_id}.mp3"
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_bytes(b"ID3-mock")
+            return str(out)
+
+        with patch.object(exporters, "synthesize_voice", fake_tts):
+            res = api.synthesize_draft_voice(
+                self.did,
+                api.VoiceBody(slide_index=1, voice="vi-VN-NamMinhNeural", rate="+15%", loi_thuyet_trinh="Câu một mới. Câu hai mới.", recheck=False),
+            )
+        d = res["draft"]
+        self.assertEqual(d["options"]["voice"], "vi-VN-NamMinhNeural")
+        self.assertEqual(d["options"]["rate"], "+15%")
+        self.assertIn("audio_1", d["files"])
+        self.assertNotIn("audio_2", d["files"])
+        self.assertEqual(len(d["voice_segments"]["1"]), 2)
+        self.assertEqual(d["voice_segments"]["1"][0]["id"], "A1")
+        self.assertEqual(calls, [(1, "Câu một mới. Câu hai mới.", "vi-VN-NamMinhNeural", "+15%")])
+
+    def test_clean_tts_strips_segment_brackets(self):
+        self.assertEqual(exporters._clean_tts_text("Nhiệt độ thấp ổn định hơn [D01-S02]."), "Nhiệt độ thấp ổn định hơn .")
+        self.assertEqual(exporters._clean_tts_text("Xin chào"), "Xin chào")
+
+
 if __name__ == "__main__":
     unittest.main()

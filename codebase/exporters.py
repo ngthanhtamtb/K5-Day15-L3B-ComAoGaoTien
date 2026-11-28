@@ -10,6 +10,14 @@ from urllib.parse import quote
 
 
 ALLOWED_VOICES = {"vi-VN-HoaiMyNeural", "vi-VN-NamMinhNeural"}
+ALLOWED_RATES = {"-20%", "-15%", "-10%", "+0%", "+10%", "+15%", "+20%", "+25%"}
+
+
+def _clean_tts_text(text: str) -> str:
+    """Làm sạch mã đoạn trích dẫn [D01-S02] hoặc ký hiệu thừa trước khi đọc thành tiếng."""
+    cleaned = re.sub(r"\[\s*(?:nguồn\s*:\s*)?D\d{2}-[SQ]\d{2}[^\]]*\]", "", text)
+    cleaned = re.sub(r"[ \t]+", " ", cleaned).strip()
+    return cleaned or text.strip()
 
 
 def _find_fonts() -> tuple[Path, Path]:
@@ -69,9 +77,9 @@ def export_quiz_pdf(quiz: list[dict], out_dir: str, title: str = "Quiz") -> dict
 def _slide_illustration_svg(slide: dict, minimal: bool) -> str:
     """Tạo hình minh hoạ SVG sạch sẽ theo chủ đề slide (không lặp text để giữ nguyên kiểm đếm test)."""
     blob = ("%s %s" % (slide.get("tieu_de", ""), " ".join(slide.get("y_chinh", [])))).lower()
-    accent = "#475569" if minimal else "#2563eb"
-    soft = "#f1f5f9" if minimal else "#eff6ff"
-    border = "#cbd5e1" if minimal else "#bfdbfe"
+    accent = "#0F172A" if minimal else "#1E3A5F"
+    soft = "#F1F5F9" if minimal else "#EFF6FF"
+    border = "#CBD5E1" if minimal else "#BFDBFE"
     if any(k in blob for k in ("rag", "truy xuất", "embedding", "vector", "kho")):
         inner = (
             f'<rect x="18" y="34" width="66" height="92" rx="8" fill="{soft}" stroke="{accent}" stroke-width="2"/>'
@@ -161,9 +169,10 @@ def render_slides(slides: list[dict], out_dir: str, title: str = "Slide", audio:
         custom_svg = _sanitize_svg(vis.get("svg", "")) if vis.get("svg") else ""
         illust = custom_svg or _slide_illustration_svg(slide, minimal)
         sections.append(
-            f'<section class="slide layout-{layout}"{hidden}>'
+            f'<section data-layout="{layout}" class="slide"{hidden}>'
             f'<div class="slide-top"><span class="slide-num">Slide {index} / {total}</span>'
             f'<span class="slide-badge">Nguồn: {safe(slide["segment_id"])}</span></div>'
+            f'<div class="slide-bar"></div>'
             f'<div class="slide-grid"><div class="slide-main">'
             f'<h2>{safe(slide["tieu_de"])}</h2><ul>{points}</ul></div>'
             f'{illust}</div>'
@@ -174,29 +183,31 @@ def render_slides(slides: list[dict], out_dir: str, title: str = "Slide", audio:
     content = """<!doctype html><html lang="vi"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>""" + safe(title) + """</title><style>
-body{font-family:'Segoe UI',Arial,sans-serif;max-width:980px;margin:2rem auto;padding:0 1.2rem;background:linear-gradient(135deg,#eef2ff 0%,#f8fafc 100%);color:#17243a}
-h1{font-size:1.4rem;color:#1e293b;margin-bottom:1rem;border-left:4px solid #2563eb;padding-left:.75rem}
-section{background:#fff;padding:2rem;border-radius:16px;box-shadow:0 10px 30px rgba(15,23,42,.08);border:1px solid #e2e8f0}
-.slide-top{display:flex;justify-content:space-between;align-items:center;gap:.5rem;margin-bottom:1rem;font-size:.85rem}
-.slide-num{color:#64748b;font-weight:600}
-.slide-badge{background:#dbeafe;color:#1d4ed8;padding:.25rem .65rem;border-radius:999px;font-weight:600}
+body{font-family:'Fira Sans','Segoe UI',Arial,sans-serif;max-width:980px;margin:2rem auto;padding:0 1.2rem;background:#F8FAFC;color:#0F172A}
+h1{font-size:1.35rem;color:#0F172A;margin-bottom:1rem;border-left:4px solid #1E3A5F;padding-left:.75rem}
+section{background:#fff;padding:2.2rem 2.5rem;border-radius:14px;box-shadow:0 4px 18px rgba(15,23,42,.06);border:1px solid #CBD5E1}
+.slide-top{display:flex;justify-content:space-between;align-items:center;gap:.5rem;margin-bottom:.75rem;font-size:.85rem}
+.slide-num{color:#475569;font-weight:600;font-family:'Fira Code',ui-monospace,monospace}
+.slide-badge{background:#1E3A5F;color:#fff;padding:.2rem .65rem;border-radius:6px;font-weight:600;font-family:'Fira Code',ui-monospace,monospace;font-size:.8rem}
+.slide-bar{width:56px;height:6px;border-radius:3px;background:#1E3A5F;margin-bottom:.9rem}
 .slide-grid{display:grid;grid-template-columns:1.45fr 1fr;gap:1.5rem;align-items:center}
-.layout-cards ul,.layout-comparison ul{list-style:none;padding:0;display:grid;gap:.65rem}
-.layout-cards li,.layout-comparison li{margin:0;background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid #2563eb;border-radius:10px;padding:.7rem .9rem}
-.layout-comparison ul{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
-.layout-timeline ul{list-style:none;padding-left:1.35rem;border-left:3px solid #bfdbfe}
-.layout-timeline li{position:relative;margin:.85rem 0;padding-left:.35rem}
-.layout-timeline li::before{content:"";position:absolute;left:-1.85rem;top:.45rem;width:11px;height:11px;border-radius:50%;background:#2563eb;border:2px solid #fff;box-shadow:0 0 0 2px #bfdbfe}
+section[data-layout="cards"] ul,section[data-layout="comparison"] ul{list-style:none;padding:0;display:grid;gap:.65rem}
+section[data-layout="cards"] li,section[data-layout="comparison"] li{margin:0;background:#F8FAFC;border:1px solid #E4E7EB;border-left:4px solid #1E3A5F;border-radius:10px;padding:.7rem .9rem}
+section[data-layout="comparison"] ul{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
+section[data-layout="timeline"] ul{list-style:none;padding-left:1.35rem;border-left:3px solid #BFDBFE}
+section[data-layout="timeline"] li{position:relative;margin:.85rem 0;padding-left:.35rem}
+section[data-layout="timeline"] li::before{content:"";position:absolute;left:-1.85rem;top:.45rem;width:11px;height:11px;border-radius:50%;background:#1E3A5F;border:2px solid #fff;box-shadow:0 0 0 2px #BFDBFE}
 .slide-visual svg{width:100%;height:auto;max-height:240px;display:block;border-radius:12px}
 @media (max-width:720px){.slide-grid{grid-template-columns:1fr}}
-h2{margin:0 0 .85rem;font-size:1.5rem;color:#0f172a;line-height:1.3}
-ul{padding-left:1.25rem;margin:0}li{margin:.75rem 0;line-height:1.5;font-size:1.02rem}
+h2{margin:0 0 .85rem;font-size:1.65rem;color:#0F172A;line-height:1.25}
+ul{padding-left:1.25rem;margin:0}li{margin:.75rem 0;line-height:1.5;font-size:1.05rem}
 p,li,h1,h2{white-space:pre-wrap;overflow-wrap:anywhere}
-details{margin-top:1.25rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:.7rem 1rem}
+details{margin-top:1.25rem;background:#F8FAFC;border:1px solid #E4E7EB;border-radius:10px;padding:.7rem 1rem}
 summary{cursor:pointer;font-weight:600;color:#334155}
-nav{display:flex;align-items:center;justify-content:center;gap:.75rem;margin-top:1rem}
-button{padding:.6rem 1.15rem;border-radius:8px;border:1px solid #cbd5e1;background:#fff;color:#0f172a;font-weight:600;cursor:pointer}
-button:hover:not(:disabled){background:#2563eb;color:#fff;border-color:#2563eb}
+nav{display:flex;align-items:center;justify-content:center;gap:.75rem;margin-top:1rem;flex-wrap:wrap}
+button{padding:.6rem 1.15rem;border-radius:8px;border:1px solid #CBD5E1;background:#fff;color:#0F172A;font-weight:600;cursor:pointer;font-family:inherit}
+button:hover:not(:disabled){background:#1E3A5F;color:#fff;border-color:#1E3A5F}
+button.primary{background:#1E3A5F;color:#fff;border-color:#1E3A5F}
 button:disabled{opacity:.45;cursor:not-allowed}
 audio{display:block;margin-top:1rem;width:100%}[hidden]{display:none}
 html:fullscreen body{max-width:none;width:100vw;height:100vh;margin:0;padding:1.5vh 3vw;box-sizing:border-box;display:flex;flex-direction:column;gap:1vh}
@@ -212,22 +223,46 @@ html:fullscreen nav{margin:0}
 </style></head><body><h1>""" + safe(title) + "</h1>" + "".join(sections) + """
 <nav aria-label="Điều hướng"><button id="previous" type="button">← Trước</button>
 <span id="position" aria-live="polite"></span><button id="next" type="button">Sau →</button>
+<button id="autoplay" class="primary" type="button">▶ Thuyết trình tự động</button>
 <button id="fullscreen" type="button">⛶ Toàn màn hình</button></nav>
 <script>
 const slides = Array.from(document.querySelectorAll('.slide'));
-let current = 0;
-function show(index) {
+let current = 0, autoNarrate = false;
+const autoBtn = document.getElementById('autoplay');
+function syncAutoBtn() {
+  autoBtn.textContent = autoNarrate ? '⏸ Dừng thuyết trình' : '▶ Thuyết trình tự động';
+}
+function show(index, playVoice) {
   current = Math.max(0, Math.min(index, slides.length - 1));
   slides.forEach((slide, i) => {
     slide.hidden = i !== current;
-    if (slide.hidden) slide.querySelectorAll('audio').forEach(audio => audio.pause());
+    if (slide.hidden) slide.querySelectorAll('audio').forEach(a => { a.pause(); a.currentTime = 0; });
   });
   document.getElementById('position').textContent = slides.length ? `${current + 1} / ${slides.length}` : '0 / 0';
   document.getElementById('previous').disabled = !slides.length || current === 0;
   document.getElementById('next').disabled = !slides.length || current === slides.length - 1;
+  if (playVoice && slides[current]) {
+    const a = slides[current].querySelector('audio');
+    if (a) a.play().catch(() => { autoNarrate = false; syncAutoBtn(); });
+  }
 }
-document.getElementById('previous').addEventListener('click', () => show(current - 1));
-document.getElementById('next').addEventListener('click', () => show(current + 1));
+slides.forEach((slide, idx) => {
+  const a = slide.querySelector('audio');
+  if (a) a.addEventListener('ended', () => {
+    if (!autoNarrate) return;
+    if (idx < slides.length - 1) show(idx + 1, true);
+    else { autoNarrate = false; syncAutoBtn(); }
+  });
+});
+document.getElementById('previous').addEventListener('click', () => { autoNarrate = false; syncAutoBtn(); show(current - 1, false); });
+document.getElementById('next').addEventListener('click', () => { autoNarrate = false; syncAutoBtn(); show(current + 1, false); });
+autoBtn.addEventListener('click', () => {
+  if (!slides.length) return;
+  autoNarrate = !autoNarrate; syncAutoBtn();
+  const a = slides[current].querySelector('audio');
+  if (autoNarrate) { if (a) a.play().catch(() => {}); }
+  else if (a) a.pause();
+});
 document.getElementById('fullscreen').addEventListener('click', () => {
   if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
   else document.exitFullscreen?.();
@@ -235,24 +270,28 @@ document.getElementById('fullscreen').addEventListener('click', () => {
 document.addEventListener('keydown', event => {
   if (event.target.closest('audio, input, textarea, select, [contenteditable]')) return;
   if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-    event.preventDefault(); show(current + (event.key === 'ArrowRight' ? 1 : -1));
+    event.preventDefault(); autoNarrate = false; syncAutoBtn(); show(current + (event.key === 'ArrowRight' ? 1 : -1), false);
   }
 });
-show(0);
+show(0, false);
 </script></body></html>"""
     path = directory / "slides.html"
     path.write_text(content, encoding="utf-8")
     return str(path)
 
 
-def synthesize_voice(slide_id: int, text: str, out_dir: str, voice: str = "vi-VN-HoaiMyNeural") -> str:
+def synthesize_voice(slide_id: int, text: str, out_dir: str, voice: str = "vi-VN-HoaiMyNeural",
+                     rate: str = "+0%") -> str:
     """Generate MP3 speech, including when called from a running event loop."""
     if voice not in ALLOWED_VOICES:
         raise ValueError("Giọng không được phép. Chỉ hỗ trợ vi-VN-HoaiMyNeural và vi-VN-NamMinhNeural.")
+    if rate not in ALLOWED_RATES:
+        rate = "+0%"
     if not isinstance(text, str) or not text.strip():
         raise ValueError("Text không được rỗng.")
     if not isinstance(slide_id, int) or isinstance(slide_id, bool) or slide_id < 1:
         raise ValueError("slide_id phải là số nguyên từ 1.")
+    cleaned = _clean_tts_text(text)
     directory = Path(out_dir)
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / f"slide_{slide_id}.mp3"
@@ -260,7 +299,8 @@ def synthesize_voice(slide_id: int, text: str, out_dir: str, voice: str = "vi-VN
     async def generate():
         import edge_tts
 
-        await edge_tts.Communicate(text, voice).save(str(path))
+        comm = edge_tts.Communicate(cleaned, voice) if rate == "+0%" else edge_tts.Communicate(cleaned, voice, rate=rate)
+        await comm.save(str(path))
 
     def run():
         asyncio.run(generate())

@@ -19,6 +19,7 @@ import os
 import re
 import sys
 import threading
+import time
 import uuid
 from typing import Optional
 
@@ -55,6 +56,20 @@ app.add_middleware(CORSMiddleware,
 
 DRAFTS = {}   # draft_id -> dict. Lưu bền ra drafts/_state.json; status luôn là "cho_duyet" — không bao giờ "đã xuất bản".
 _STATE_LOCK = threading.Lock()
+_LIVE_STATUS = {"active": False, "op": "", "phase": "", "detail": "", "done": 0, "total": 0, "t0": 0.0}
+
+
+def _set_live(active: bool, op: str = "", phase: str = "", detail: str = "", done: int = 0, total: int = 0):
+    now = time.perf_counter()
+    _LIVE_STATUS.update(
+        active=active,
+        op=op if active else "",
+        phase=phase if active else "",
+        detail=detail if active else "",
+        done=done if active else 0,
+        total=total if active else 0,
+        t0=(_LIVE_STATUS["t0"] or now) if active else 0.0,
+    )
 
 
 def _save_state():
@@ -105,6 +120,73 @@ class ReviewBody(BaseModel):
     noi_dung: str
 
 
+class VoiceBody(BaseModel):
+    slide_index: Optional[int] = None        # None = tạo cho mọi slide; 1..N = chỉ slide đó
+    voice: Optional[str] = None              # vi-VN-HoaiMyNeural | vi-VN-NamMinhNeural
+    rate: Optional[str] = None               # -15% | +0% | +15% | +25%
+    loi_thuyet_trinh: Optional[str] = None   # cập nhật lời thuyết trình riêng của slide_index
+    recheck: bool = False                    # kiểm lại từng câu trong lời thuyết trình với kho nguồn
+
+
+def _voice_opts(d: dict) -> tuple[str, str]:
+    opts = d.get("options") or {}
+    voice = opts.get("voice") if opts.get("voice") in exporters.ALLOWED_VOICES else "vi-VN-HoaiMyNeural"
+    rate = opts.get("rate") if opts.get("rate") in exporters.ALLOWED_RATES else "+0%"
+    return voice, rate
+
+
+def _split_voice_sentences(text: str) -> list[str]:
+    parts = [p.strip() for p in re.split(r"(?<=[.!?…])\s+|\n+", (text or "").strip()) if p.strip()]
+    return parts or ([text.strip()] if (text or "").strip() else [])
+
+
+def _build_voice_meta(slide: dict, claims: list[dict] = None) -> list[dict]:
+    """Tách lời thuyết trình thành các đoạn A1, A2… kèm ước lượng mốc thời gian, liên kết ý trên slide và nhãn kiểm."""
+    sents = _split_voice_sentences(slide.get("loi_thuyet_trinh", ""))
+    if not sents:
+        return []
+    bullets = [set(tools._tokens(b)) for b in (slide.get("y_chinh") or [])]
+    weights = [max(8, len(s)) for s in sents]
+    total_w = sum(weights) or 1
+    est_dur = max(6, round(sum(len(s.split()) for s in sents) / 2.6))
+    t_cur = 0.0
+    out = []
+    for idx, (sent, w) in enumerate(zip(sents, weights), 1):
+        dur_i = est_dur * (w / total_w)
+        t0, t1 = round(t_cur, 1), round(t_cur + dur_i, 1)
+        t_cur += dur_i
+        stoks = set(tools._tokens(sent))
+        best_b, best_ov = None, 0
+        for bi, btoks in enumerate(bullets, 1):
+            ov = len(stoks & btoks)
+            if ov > best_ov and ov >= 2:
+                best_b, best_ov = bi, ov
+        matched = None
+        if claims:
+            if len(claims) == len(sents):
+                matched = claims[idx - 1]
+            else:
+                for c in claims:
+                    ct = set(tools._tokens(c.get("noi_dung", "")))
+                    if ct and len(ct & stoks) / max(1, len(ct)) >= 0.45:
+                        matched = c
+                        break
+        nhan = (matched or {}).get("nhan") or "KHOP_NGUON"
+        seg_id = (matched or {}).get("segment_id") or (slide.get("segment_id", "") if nhan != "THIEU_NGUON" else "")
+        has_term = bool(re.search(r"\b(autoregressive|temperature|softmax|logits?|subword|context window|hallucination|few-shot|chain-of-thought|fine-tuning|embedding|cosine|chunk\w*|top-k|prompt)\b", sent, re.I))
+        kind = "Ý %d trên slide" % best_b if best_b else ("Mở đầu / chuyển ý" if idx == 1 and len(sents) > 1 else "Ngoài slide")
+        if has_term and nhan == "KHOP_NGUON":
+            kind += " · có thuật ngữ Anh"
+        out.append({
+            "id": "A%d" % idx, "t0": t0, "t1": max(t0 + 1.0, t1), "est_dur": est_dur,
+            "bullet": best_b, "kind": kind, "noi_dung": sent, "nhan": nhan,
+            "segment_id": seg_id,
+            "ly_do": (matched or {}).get("ly_do") or ("Khớp ý %d trên slide và đoạn nguồn %s." % (best_b, seg_id) if best_b and seg_id else "Lời dẫn thuyết trình khớp ngữ cảnh slide."),
+            "de_xuat_sua": (matched or {}).get("de_xuat_sua") or "",
+        })
+    return out
+
+
 def _get(draft_id):
     d = DRAFTS.get(draft_id)
     if not d:
@@ -115,11 +197,14 @@ def _get(draft_id):
 def _traced(label, fn, *args, **kwargs):
     """Chạy fn trong khung trace, trả (kết quả, trace). trace: số gọi model / công cụ, token, chi phí theo giá niêm yết, từng bước."""
     with _TRACE_LOCK:
+        _LIVE_STATUS.update(active=True, phase=label, t0=_LIVE_STATUS["t0"] or time.perf_counter())
         tracing.begin(label)
         try:
             res = fn(*args, **kwargs)
         finally:
             summary, events = tracing.end()
+            if not _LIVE_STATUS.get("op"):
+                _set_live(False)
     cost = sum((e.get("tokens_in") or 0) * PRICES.get(e.get("model"), (0, 0))[0]
                + (e.get("tokens_out") or 0) * PRICES.get(e.get("model"), (0, 0))[1]
                for e in events if e["kind"] == "model") / 1e6
@@ -127,6 +212,36 @@ def _traced(label, fn, *args, **kwargs):
               "tokens_in": e.get("tokens_in"), "tokens_out": e.get("tokens_out"),
               "latency_s": e.get("latency_s", e.get("t")), "loi": e.get("error")} for e in events]
     return res, dict(summary, nhan=label, chi_phi_usd_niem_yet=round(cost, 5), cac_buoc=steps)
+
+
+@app.get("/api/progress")
+def live_progress():
+    """Trả tiến trình thực tế đang chạy trên server (đọc trực tiếp từ _LIVE_STATUS và sự kiện thật trong tracing._case)."""
+    evs = list(tracing._case.get("events") or [])
+    tools_ev = [e for e in evs if e.get("kind") == "tool"]
+    models_ev = [e for e in evs if e.get("kind") == "model"]
+    notes_ev = [e for e in evs if e.get("kind") == "note"]
+    t0 = _LIVE_STATUS.get("t0") or tracing._case.get("t0") or 0.0
+    active = bool(_LIVE_STATUS.get("active") or tracing._case.get("id"))
+    return {
+        "active": active,
+        "op": _LIVE_STATUS.get("op") or "",
+        "phase": _LIVE_STATUS.get("phase") or tracing._case.get("id") or "",
+        "detail": _LIVE_STATUS.get("detail") or (notes_ev[-1].get("text", "") if notes_ev else ""),
+        "done": _LIVE_STATUS.get("done") or 0,
+        "total": _LIVE_STATUS.get("total") or 0,
+        "elapsed_s": round(max(0.0, time.perf_counter() - t0), 1) if (active and t0) else 0.0,
+        "tool_calls": len(tools_ev),
+        "model_calls": len(models_ev),
+        "tokens_in": sum(e.get("tokens_in") or 0 for e in models_ev),
+        "tokens_out": sum(e.get("tokens_out") or 0 for e in models_ev),
+        "last_tool": tools_ev[-1].get("name", "") if tools_ev else "",
+        "last_model": models_ev[-1].get("model", "") if models_ev else "",
+        "recent_steps": [
+            {"loai": e.get("kind"), "ten": e.get("name") or e.get("text", ""), "model": e.get("model") or "", "t": e.get("t", 0)}
+            for e in evs[-6:]
+        ],
+    }
 
 
 def _recheck(kind, items, indexes, mode, traces=None):
@@ -179,11 +294,16 @@ def create_draft(body: CreateBody):
     if data.get("status") != "cho_duyet":
         return {"created": False, "status": data.get("status"), "message": res["output"], "trace": trace}
     draft_id = "draft-" + uuid.uuid4().hex[:8]
+    opts = dict(body.options or {})
+    if body.kind == "slide":
+        opts.setdefault("voice", "vi-VN-HoaiMyNeural")
+        opts.setdefault("rate", "+0%")
+    voice_segs = {str(i): _build_voice_meta(it) for i, it in enumerate(data["items"], 1)} if body.kind == "slide" else {}
     DRAFTS[draft_id] = {
         "draft_id": draft_id, "kind": body.kind, "buoi": body.buoi, "chu_de": chu_de,
-        "script_id": body.script_id, "options": body.options or {},
+        "script_id": body.script_id, "options": opts,
         "items": data["items"], "nhan": data["nhan"], "stage": "cong_1", "status": "cho_duyet",
-        "files": {}, "message": res["output"], "traces": [trace],
+        "files": {}, "audio_ts": {}, "voice_segments": voice_segs, "message": res["output"], "traces": [trace],
         "created_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
     }
     _save_state()
@@ -229,6 +349,21 @@ def gate1(draft_id: str, body: DecisionsBody):
             raise HTTPException(422, "action phải là accept / reject / edit")
     checks = _recheck(d["kind"], items, edited, "DUYET_QUIZ" if d["kind"] == "quiz" else "DUYET_KICH_BAN", d["traces"])
     d["items"] = [it for i, it in enumerate(items, 1) if i not in rejected]
+    if d["kind"] == "slide":
+        kept_indices = [i for i in range(1, len(items) + 1) if i not in rejected]
+        old_files = d.get("files") or {}
+        old_ts = d.get("audio_ts") or {}
+        new_files, new_ts, new_vsegs = {}, {}, {}
+        for new_i, old_i in enumerate(kept_indices, 1):
+            c_list = (checks.get(old_i) or {}).get("nhan")
+            new_vsegs[str(new_i)] = _build_voice_meta(d["items"][new_i - 1], c_list)
+            if old_i not in edited and ("audio_%d" % old_i) in old_files and os.path.isfile(old_files["audio_%d" % old_i]):
+                new_files["audio_%d" % new_i] = old_files["audio_%d" % old_i]
+                if str(old_i) in old_ts:
+                    new_ts[str(new_i)] = old_ts[str(old_i)]
+        d["files"] = new_files
+        d["audio_ts"] = new_ts
+        d["voice_segments"] = new_vsegs
     d["rejected"] = sorted(rejected)
     d["notes"] = {dec.index: dec.note for dec in body.decisions if dec.note}   # ghi chú "Cần sửa" của giảng viên
     d["gate1_checks"] = checks
@@ -244,28 +379,47 @@ def build(draft_id: str):
     if not d["items"]:
         raise HTTPException(409, "không còn mục nào sau cổng 1")
     out = os.path.join(DRAFT_DIR, draft_id)
+    total_items = len(d["items"])
+    _set_live(True, op="build", phase="Đang dựng bản hoàn chỉnh", detail="Chuẩn bị dựng %d mục" % total_items, done=0, total=total_items + 2)
     try:
         if d["kind"] == "quiz":
+            _set_live(True, op="build", phase="Đang xuất 2 file PDF đề & đáp án", detail="Kết xuất Unicode PDF", done=1, total=2)
             d["files"] = exporters.export_quiz_pdf(d["items"], out, "Quiz buổi %d — %s" % (d["buoi"], d["chu_de"]))
         else:
             try:
+                _set_live(True, op="build", phase="Thiết kế bố cục & vẽ sơ đồ SVG minh hoạ", detail="Sonnet 5.5 chọn layout & vẽ SVG cho %d slide" % total_items, done=0, total=total_items + 2)
                 vis_res, vis_trace = _traced("thiết kế bố cục & sơ đồ slide", agent.design_slides_visuals, d["items"])
                 if isinstance(vis_res, dict) and vis_res.get("items"):
                     d["items"] = vis_res["items"]
                 d["traces"].append(vis_trace)
             except Exception:
                 pass    # lỗi mạng khi vẽ visual: fallback về sơ đồ SVG mặc định, vẫn dựng slide
+            voice, rate = _voice_opts(d)
             audio, errors = {}, {}
+            ts_map = dict(d.get("audio_ts") or {})
+            existing = d.get("files") or {}
             for i, it in enumerate(d["items"], 1):
+                _set_live(True, op="build", phase="Tổng hợp giọng đọc thuyết trình", detail="Slide %d/%d: %s" % (i, total_items, it.get("tieu_de", "")), done=i, total=total_items + 2)
+                cur_audio = existing.get("audio_%d" % i)
+                if cur_audio and os.path.isfile(cur_audio) and d.get("_voice_used") == (voice, rate):
+                    audio[i] = cur_audio
+                    continue
                 try:
-                    audio[i] = exporters.synthesize_voice(i, it["loi_thuyet_trinh"], out)
+                    audio[i] = exporters.synthesize_voice(i, it["loi_thuyet_trinh"], out, voice=voice, rate=rate)
+                    ts_map[str(i)] = int(time.time() * 1000)
                 except RuntimeError as exc:      # TTS lỗi mạng: vẫn dựng slide, báo rõ slide nào thiếu audio
                     errors[i] = str(exc)
+            _set_live(True, op="build", phase="Kết xuất bản trình chiếu HTML", detail="Đóng gói giao diện slide & audio", done=total_items + 1, total=total_items + 2)
             html = exporters.render_slides(d["items"], out, "Slide buổi %d — %s" % (d["buoi"], d["chu_de"]), audio, d["options"])
             d["files"] = dict({"slides_html": html}, **{"audio_%d" % i: p for i, p in audio.items()})
+            d["audio_ts"] = ts_map
+            d["_voice_used"] = (voice, rate)
+            d.setdefault("voice_segments", {str(i): _build_voice_meta(it) for i, it in enumerate(d["items"], 1)})
             d["audio_errors"] = errors
     except RuntimeError as exc:
+        _set_live(False)
         raise HTTPException(500, str(exc))
+    _set_live(False)
     d["stage"] = "cong_2"
     _save_state()
     return _public(d)
@@ -288,17 +442,98 @@ def gate2(draft_id: str, body: DecisionsBody):
     out = os.path.join(DRAFT_DIR, draft_id)
     title = "%s buổi %d — %s" % ("Quiz" if d["kind"] == "quiz" else "Slide", d["buoi"], d["chu_de"])
     if d["kind"] == "slide":        # sửa 1 slide → chỉ sinh lại audio của slide đó
+        voice, rate = _voice_opts(d)
+        ts_map = d.setdefault("audio_ts", {})
+        vsegs = d.setdefault("voice_segments", {})
         for i in edited:
+            vsegs[str(i)] = _build_voice_meta(items[i - 1], (checks.get(i) or {}).get("nhan"))
             try:
-                d["files"]["audio_%d" % i] = exporters.synthesize_voice(i, items[i - 1]["loi_thuyet_trinh"], out)
+                d["files"]["audio_%d" % i] = exporters.synthesize_voice(i, items[i - 1]["loi_thuyet_trinh"], out, voice=voice, rate=rate)
+                ts_map[str(i)] = int(time.time() * 1000)
+                d.get("audio_errors", {}).pop(i, None)
+                d.get("audio_errors", {}).pop(str(i), None)
             except RuntimeError as exc:
                 d.setdefault("audio_errors", {})[i] = str(exc)
         audio = {int(k.split("_")[1]): v for k, v in d["files"].items() if k.startswith("audio_")}
         d["files"]["slides_html"] = exporters.render_slides(items, out, title, audio, d["options"])
+        d["_voice_used"] = (voice, rate)
     else:
         d["files"] = exporters.export_quiz_pdf(items, out, title)
     _save_state()
     return {"draft": _public(d), "kiem_lai_muc_sua": checks}
+
+
+@app.post("/api/drafts/{draft_id}/voice")
+def synthesize_draft_voice(draft_id: str, body: VoiceBody):
+    """Tạo / tạo lại giọng đọc thuyết trình (TTS) cho 1 slide hoặc toàn bộ bộ slide ngay ở Cổng 1 hoặc Cổng 2;
+    hỗ trợ đổi giọng (Hoài My / Nam Minh), tốc độ đọc, sửa lời thuyết trình và đối chiếu lại từng câu với nguồn."""
+    d = _get(draft_id)
+    if d["kind"] != "slide":
+        raise HTTPException(422, "chỉ bản nháp slide mới có giọng thuyết trình")
+    if d["stage"] == "cho_duyet":
+        raise HTTPException(409, "bản nháp đã gửi chờ duyệt, không sửa giọng đọc")
+    items = d["items"]
+    if not items:
+        raise HTTPException(409, "bản nháp không có slide nào")
+    opts = d.setdefault("options", {})
+    if body.voice is not None:
+        if body.voice not in exporters.ALLOWED_VOICES:
+            raise HTTPException(422, "giọng đọc không hợp lệ (chỉ hỗ trợ vi-VN-HoaiMyNeural và vi-VN-NamMinhNeural)")
+        opts["voice"] = body.voice
+    if body.rate is not None:
+        if body.rate not in exporters.ALLOWED_RATES:
+            raise HTTPException(422, "tốc độ đọc không hợp lệ")
+        opts["rate"] = body.rate
+    voice, rate = _voice_opts(d)
+
+    if body.slide_index is not None:
+        if not 1 <= body.slide_index <= len(items):
+            raise HTTPException(422, "slide_index %d ngoài phạm vi 1..%d" % (body.slide_index, len(items)))
+        targets = [body.slide_index]
+    else:
+        targets = list(range(1, len(items) + 1))
+
+    vsegs = d.setdefault("voice_segments", {})
+    voice_check = None
+    if body.slide_index is not None and body.loi_thuyet_trinh is not None:
+        new_text = body.loi_thuyet_trinh.strip()
+        if not new_text:
+            raise HTTPException(422, "lời thuyết trình không được rỗng")
+        if INJECT.search(new_text):
+            raise HTTPException(422, "lời thuyết trình chứa chỉ dẫn chèn cho hệ thống")
+        items[body.slide_index - 1] = dict(items[body.slide_index - 1], loi_thuyet_trinh=new_text)
+        d["items"] = items
+        if body.recheck:
+            mode = "DUYET_CUOI" if d["stage"] == "cong_2" else "DUYET_KICH_BAN"
+            (claims, injected), trace = _traced("kiểm giọng đọc slide %d" % body.slide_index, agent._review, mode, new_text)
+            d.setdefault("traces", []).append(trace)
+            voice_check = {"nhan": claims, "chen_chi_dan": injected}
+            d.setdefault("voice_checks", {})[str(body.slide_index)] = voice_check
+            vsegs[str(body.slide_index)] = _build_voice_meta(items[body.slide_index - 1], claims)
+        else:
+            vsegs[str(body.slide_index)] = _build_voice_meta(items[body.slide_index - 1])
+
+    out = os.path.join(DRAFT_DIR, draft_id)
+    files = d.setdefault("files", {})
+    ts_map = d.setdefault("audio_ts", {})
+    errors = d.setdefault("audio_errors", {})
+    for i in targets:
+        if str(i) not in vsegs:
+            vsegs[str(i)] = _build_voice_meta(items[i - 1])
+        try:
+            files["audio_%d" % i] = exporters.synthesize_voice(i, items[i - 1]["loi_thuyet_trinh"], out, voice=voice, rate=rate)
+            ts_map[str(i)] = int(time.time() * 1000)
+            errors.pop(i, None)
+            errors.pop(str(i), None)
+        except RuntimeError as exc:
+            errors[str(i)] = str(exc)
+
+    d["_voice_used"] = (voice, rate)
+    if "slides_html" in files:
+        audio = {int(k.split("_")[1]): v for k, v in files.items() if k.startswith("audio_") and os.path.isfile(v)}
+        files["slides_html"] = exporters.render_slides(items, out, "Slide buổi %d — %s" % (d["buoi"], d["chu_de"]), audio, opts)
+    _save_state()
+    return {"draft": _public(d), "kiem_lai_giong_doc": voice_check}
 
 
 @app.post("/api/drafts/{draft_id}/submit")
