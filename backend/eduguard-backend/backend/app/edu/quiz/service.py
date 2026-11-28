@@ -108,8 +108,6 @@ class Conflict(RuntimeError):
 
 def decide(quiz_id: str, question_id: str, action: str) -> QuizQuestion:
     qs = get(quiz_id)
-    if qs.status != "nhap":
-        raise Conflict("bộ quiz đã gửi chờ duyệt")
     q = next((x for x in qs.questions if x.id == question_id), None)
     if q is None:
         raise NotFound(question_id)
@@ -132,17 +130,12 @@ def list_quizzes() -> List[dict]:
         qs = QuizSet(**data)
         out.append({"id": qs.id, "docId": qs.doc_id, "title": qs.title, "engine": qs.engine, "status": qs.status,
                     "questions": len(qs.questions), "updatedAt": os.path.getmtime(p),
-                    "decided": sum(1 for q in qs.questions if q.decision != "chua_quyet")})
+                    "decided": sum(1 for q in qs.questions if q.decision != "chua_quyet"),
+                    "needsReview": sum(1 for q in qs.questions if (q.verdict or {}).get("nhan") in ("SAI_NGUON", "THIEU_NGUON")
+                                       and q.decision not in ("chap_nhan", "tu_choi_cau"))})
     return sorted(out, key=lambda s: -s["updatedAt"])
 
 
-def submit(quiz_id: str) -> QuizSet:
-    qs = get(quiz_id)
-    left = [q.code for q in qs.questions if q.decision == "chua_quyet"]
-    if left:
-        raise Conflict(f"còn {len(left)} câu chưa quyết định: {', '.join(left[:8])}")
-    qs.status = "cho_duyet"
-    return save(qs)
 
 
 async def evaluate(quiz_id: str, req: EvaluateRequest) -> QuizSet:
@@ -176,8 +169,6 @@ def update_question(quiz_id: str, question_id: str, req: UpdateQuestionRequest) 
     qs = get(quiz_id)
     for i, q in enumerate(qs.questions):
         if q.id == question_id:
-            if qs.status != "nhap":
-                raise Conflict("bộ quiz đã gửi chờ duyệt")
             patch = req.model_dump(exclude_none=True)
             q = q.model_copy(update={**patch, "decision": "da_sua", "verdict": None})  # needs re-verify
             if q.correct_key:

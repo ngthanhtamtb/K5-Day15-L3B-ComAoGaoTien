@@ -25,10 +25,12 @@ export const store = createStore({
 });
 
 let toastId = 0;
-export function toast(message, tone = "info", ms = 4500) {
+/** Short feedback (auto-dismiss 4.5s). `action` = { label, run } adds an inline button, e.g. Undo. */
+export function toast(message, tone = "info", ms = 4500, action = null) {
   const id = ++toastId;
-  store.set((s) => ({ toasts: [...s.toasts, { id, message, tone }] }));
-  setTimeout(() => store.set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })), ms);
+  const dismiss = () => store.set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));
+  store.set((s) => ({ toasts: [...s.toasts, { id, message, tone, action, dismiss }] }));
+  setTimeout(dismiss, action ? Math.max(ms, 7000) : ms);
 }
 
 export function setTrace(label, summary) {

@@ -145,6 +145,14 @@ class Settings(BaseSettings):
         # instead of refusing to start.
         extra = "ignore"
 
+    @classmethod
+    def settings_customise_sources(cls, settings_cls, init_settings, env_settings, dotenv_settings,
+                                   file_secret_settings):
+        # .env beats OS environment variables: a stale machine-wide GEMINI_API_KEY / GROQ_API_KEY
+        # (set for another project) must not silently override the key written in this app's .env.
+        # Keys absent from .env still come from the environment (deploys without a .env file).
+        return init_settings, dotenv_settings, env_settings, file_secret_settings
+
 
 import os as _os
 

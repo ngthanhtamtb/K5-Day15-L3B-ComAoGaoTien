@@ -1,6 +1,6 @@
 """Structured quiz PDF for teachers: exam paper and answer key (key + explanation + source).
 
-Only questions the teacher accepted or edited at the gate are printed (rejected ones never are).
+Every question except the ones the teacher dropped is printed.
 Needs a Unicode TTF for Vietnamese: EDU_PDF_FONT / EDU_PDF_FONT_BOLD, else Arial / DejaVu Sans.
 """
 from __future__ import annotations
@@ -48,8 +48,7 @@ def render(qs: QuizSet, answers: bool = False) -> bytes:
     questions = [q for q in qs.questions if q.decision in ("chap_nhan", "da_sua")] or \
                 [q for q in qs.questions if q.decision != "tu_choi_cau"]
     line(qs.title + (" — Đáp án" if answers else ""), 16, True)
-    status = "Bản nháp chờ duyệt" if qs.status == "cho_duyet" else "Bản nháp (chưa qua duyệt)"
-    line(f"{len(questions)} câu · {status}", 9, gap=2)
+    line(f"{len(questions)} câu", 9, gap=2)
     if not answers:
         line("Họ và tên: ................................................   Lớp: ..............", 10, gap=4)
 

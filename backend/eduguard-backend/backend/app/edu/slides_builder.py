@@ -1,7 +1,7 @@
 """Approved script -> PPTist slides, using RAGslides' template engine (SlideProcessor).
 
 Differences from RAGslides' own generator:
-  * input is the gate-1 approved script, not the whole document stuffed into a prompt
+  * input is the checked script (dropped segments excluded), not the whole document stuffed into a prompt
   * template image placeholders are filled with figures FROM THE SOURCE DOCUMENT (cited), not
     with AI-generated pictures
   * each slide carries `remark` (narration) and an `eduguard` block: segment labels, source
@@ -68,7 +68,16 @@ _LINKING = {"là", "giúp", "làm", "có", "được", "tính", "gồm", "cho", 
 
 
 def _items(slide) -> List[Dict[str, str]]:
-    segs = [s.text for s in slide.doan]
+    x = slide.extra or {}
+    if x.get("cot"):
+        return [{"title": c["ten"], "text": "; ".join(c["y"])} for c in x["cot"][:2]]
+    if x.get("buoc"):
+        return [{"title": f"{k + 1}. {b['ten']}", "text": b["mo_ta"]} for k, b in enumerate(x["buoc"][:4])]
+    if x.get("nhan_manh"):
+        return [{"title": x["nhan_manh"]["gia_tri"], "text": x["nhan_manh"].get("giai_thich", "")}]
+    if x.get("cau_hoi"):
+        return [{"title": x["cau_hoi"], "text": f"Đáp án: {x.get('dap_an', '')}"}]
+    segs = [s.text for s in slide.doan if getattr(s, "vai_tro", "noi_dung") != "dan_dat"]
     if slide.y_chinh:
         return [{"title": y, "text": (segs[i] if i < len(segs) else "")[:220]} for i, y in enumerate(slide.y_chinh[:4])]
     return [_split_point(t) for t in segs[:4]] or [{"title": slide.tieu_de, "text": ""}]
@@ -122,5 +131,4 @@ async def build_slides(sc: Script, template: str = "template_1", only_approved: 
                     "tableIds": s.table_ids, "audio": s.audio},
                    remark=" ".join(g.text for g in s.doan), audio=s.audio, image_ids=s.image_ids)
     await emit({"type": "end", "data": {"title": "Cảm ơn", "text": sc.title}}, {"kind": "end", "scriptId": sc.id})
-    return {"scriptId": sc.id, "template": template, "width": width, "height": height, "slides": out,
-            "status": "cho_duyet"}
+    return {"scriptId": sc.id, "template": template, "width": width, "height": height, "slides": out}

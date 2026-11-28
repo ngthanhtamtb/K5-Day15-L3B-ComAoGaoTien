@@ -6,12 +6,12 @@ import { LABELS } from "./ui.js";
 
 export function audioTrack(audio, { onSegment } = {}) {
   if (!audio?.url) {
-    return h("div", { class: "track track--empty muted" }, icon("mic", 16), "Slide này chưa có giọng đọc.");
+    return h("p", { class: "small muted row" }, icon("mic", 16), "Slide này chưa có giọng đọc.");
   }
   const player = h("audio", { src: audio.url, preload: "metadata" });
   const time = h("span", { class: "track__time mono" }, `0:00 / ${mmss(audio.duration)}`);
   const head = h("div", { class: "track__head" });
-  const playBtn = h("button", { class: "btn btn--primary btn--sm", type: "button", "aria-label": "Phát giọng đọc" }, icon("play", 15));
+  const playBtn = h("button", { class: "btn btn--sm", type: "button", "aria-label": "Phát giọng đọc slide" }, icon("play", 16));
   const bar = h("div", { class: "track__bar" });
   const total = audio.duration || 1;
 
@@ -29,8 +29,8 @@ export function audioTrack(audio, { onSegment } = {}) {
   bar.append(head);
 
   playBtn.addEventListener("click", () => (player.paused ? player.play() : player.pause()));
-  player.addEventListener("play", () => playBtn.replaceChildren(icon("pause", 15)));
-  player.addEventListener("pause", () => playBtn.replaceChildren(icon("play", 15)));
+  player.addEventListener("play", () => { playBtn.replaceChildren(icon("pause", 16)); playBtn.setAttribute("aria-label", "Tạm dừng"); });
+  player.addEventListener("pause", () => { playBtn.replaceChildren(icon("play", 16)); playBtn.setAttribute("aria-label", "Phát giọng đọc slide"); });
   player.addEventListener("timeupdate", () => {
     const t = player.currentTime;
     time.textContent = `${mmss(t)} / ${mmss(audio.duration)}`;

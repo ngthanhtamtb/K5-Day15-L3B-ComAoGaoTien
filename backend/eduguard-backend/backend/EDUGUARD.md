@@ -5,6 +5,8 @@ Phần mở rộng nằm ở `app/edu/` và route `/api/v1/edu/*` (file `app/api
 
 ## Chạy
 
+> `.env` được ưu tiên hơn biến môi trường của máy (Windows có thể còn `GEMINI_API_KEY` cũ ở mức hệ thống).
+
 ```bash
 cd backend
 python -m venv .venv && .venv/Scripts/activate      # macOS/Linux: source .venv/bin/activate
@@ -44,7 +46,7 @@ Các route `/edu/*` lưu file JSON trong `EDU_DATA_DIR` (mặc định `data/edu
 | `app/core/llm/trace.py` | Trace cho panel Agent verify: các bước, số lần gọi model, token, chi phí, lỗi — trả kèm mọi response có gọi model |
 | `app/core/jobs.py` | Job nền trong tiến trình (không cần Kafka) + lưu trạng thái + SSE tiến độ |
 | `app/edu/verify/` | Gắn nhãn **KHOP_NGUON / SAI_NGUON / THIEU_NGUON / TU_CHOI** (port từ prototype đã chạy 6 lượt eval). Model gắn nhãn theo chỉ số nên không bịa được khẳng định; câu có chỉ dẫn chèn → `TU_CHOI` bằng code; không có đoạn nguồn → `THIEU_NGUON` không gọi model; mã đoạn model đưa ra được code kiểm lại. Câu trắc nghiệm: kiểm từng phương án (bắt câu 2 đáp án đúng) |
-| `app/edu/scripts/` | Kịch bản (màn 1–2 prototype): dán bản nháp (`Slide N:` hoặc đoạn trống) hoặc sinh từ tài liệu; mỗi slide chia đoạn **A1..An** gắn nguồn; cổng 1: chấp nhận / từ chối / sửa (kiểm lại ngay) / bỏ quyết định, "chấp nhận mọi câu khớp nguồn", gửi chờ duyệt (409 nếu còn đoạn chưa quyết) |
+| `app/edu/scripts/` | Kịch bản (màn 1–2 prototype): dán bản nháp (`Slide N:` hoặc đoạn trống) hoặc sinh từ tài liệu; mỗi slide chia đoạn **A1..An** gắn nguồn; giáo viên sửa (kiểm lại ngay) / giữ nguyên / bỏ câu bất cứ lúc nào. **Không có bước chờ duyệt**: mọi câu được dùng cho slide và giọng đọc trừ câu bị bỏ hoặc câu chứa chỉ dẫn chèn (`included()`); `needs_review()` đếm câu "cần xem" |
 | `app/edu/slides_builder.py` | Kịch bản đã duyệt → slide PPTist bằng engine template của RAGslides; ô ảnh của template lấy **hình trong tài liệu gốc** (không sinh ảnh AI); mỗi slide có `remark` (lời đọc), khối `eduguard` (nhãn từng đoạn, mã nguồn, mốc audio) và phần tử audio tự phát |
 | `app/edu/voice/limits.py`, `script_voice.py`, `tts/job_provider.py` | Voice **theo job**: API submit → poll → lấy audio (`TTS_MODE=job`); giới hạn `TTS_RPM` + `TTS_CONCURRENCY`, thử lại 429/5xx theo `Retry-After`, cắt đoạn dài theo `TTS_MAX_CHARS` ở ranh giới câu; **ước tính trước** ký tự / số request / thời lượng / chi phí; mỗi đoạn một clip (cache theo nội dung, sửa 1 đoạn chỉ tính tiền đoạn đó), mỗi slide một track có mốc A1..An lấy từ thời lượng thật; mốc từng câu lấy từ API nếu có, không thì ước theo âm tiết (`timing_source: uoc_tinh`) |
 | `app/edu/billing/` + `config/plans.yaml` | **Khung** vai trò (`admin`, `giang_vien`, `bien_tap`, `nguoi_dung`) và gói `pho_thong` / `tra_phi` (map từ cột `subscription_type` sẵn có). `BILLING_ENFORCE=false`: không chặn gì, chỉ ghi lượng dùng theo tháng và trả `quotaWarnings`; bật `true` thì trả 402, không cần sửa code. Admin gán gói bằng tay |
@@ -58,17 +60,19 @@ Các route `/edu/*` lưu file JSON trong `EDU_DATA_DIR` (mặc định `data/edu
 | POST | `/verify` | Gắn nhãn danh sách câu với một tài liệu |
 | POST | `/scripts` | Tạo kịch bản: `noiDung` (dán) hoặc `chuDe` (sinh từ tài liệu) |
 | GET | `/scripts/{id}` | Kịch bản + đếm nhãn / quyết định |
-| POST | `/scripts/{id}/decisions` · `/accept-matching` · `/submit` | Cổng 1 |
+| POST | `/scripts/{id}/decisions` (accept · reject · edit · reset, nhiều câu một lần) · `/revise` · `/accept-matching` | Sửa / giữ / bỏ câu |
+| POST | `/documents/{docId}/deck` | **Một bước** (`khung`: `bai_giang` \| `gon`): AI thiết kế slide theo khung (xem "Khung slide") → kiểm từng câu với nguồn → gắn hình / bảng của tài liệu (theo đoạn câu trích) → giọng đọc → slide HTML (job). Voice lỗi thì vẫn ra slide, kèm `voiceError` |
+| POST | `/scripts/{id}/html` | Dựng lại slide HTML sau khi sửa câu (không gọi model). Job voice cũng tự dựng lại |
 | GET | `/templates` | Template slide |
 | POST | `/scripts/{id}/slides` | Slide PPTist từ kịch bản đã duyệt |
 | POST | `/scripts/{id}/voice/estimate` | Ước tính ký tự, request, thời lượng, chi phí, hạn mức |
 | POST | `/scripts/{id}/voice` | Sinh giọng (job) |
-| POST | `/quizzes/{id}/questions/{qid}/decision` · `/verify` · `/quizzes/{id}/submit` | Cổng duyệt quiz |
+| POST | `/quizzes/{id}/questions/{qid}/decision` · `/verify` | Giữ / bỏ / kiểm lại một câu (PDF gồm mọi câu chưa bỏ) |
 | GET | `/jobs/{id}` · `/jobs/{id}/events` (SSE) · POST `/jobs/{id}/cancel` | Theo dõi job |
 | GET | `/plans` · `/me/plan` · `/llm/status` | Gói, lượng dùng, provider nào có key |
 | PUT | `/api/v1/admin/users/{id}/plan` | Admin gán gói / vai trò |
 
-Không có endpoint xuất bản: trạng thái cuối của kịch bản và quiz luôn là `cho_duyet`.
+Không có bước chờ duyệt và không có endpoint xuất bản (đã bỏ `/scripts/{id}/submit`, `/quizzes/{id}/submit`). Trường `status` cũ trong dữ liệu được giữ để tương thích nhưng không còn chặn thao tác nào.
 
 ### Sửa lỗi / an toàn trong lúc làm
 
@@ -85,6 +89,43 @@ Không có endpoint xuất bản: trạng thái cuối của kịch bản và qu
 - Bảng trong slide mới dừng ở việc giữ `tableIds` trong khối `eduguard`, chưa vẽ thành phần tử bảng PPTist.
 - Chưa có Alembic migration; DB Postgres có sẵn cần thêm cột `users.role` bằng tay (câu lệnh trong `.env.example`).
 - Lượng dùng `llm_tokens` chưa được ghi (chỉ có `documents`, `quiz_questions`, `voice_chars`).
+
+## Khung slide (`app/edu/slide_frame.py`)
+
+Phân tích các khung slide giảng dạy hay dùng và cách áp dụng vào hệ thống:
+
+| Khung tham khảo | Ý chính | Áp dụng |
+|---|---|---|
+| Mạch bài học (Gagné, rút gọn) | mở bài → nội dung → củng cố → kiểm tra | `khung=bai_giang`: bìa → **Nội dung chính** → slide nội dung → **Tóm tắt** → **Câu hỏi nhanh** → kết. `khung=gon`: chỉ slide nội dung |
+| Assertion–Evidence (Alley) | tiêu đề là một câu khẳng định, thân slide là bằng chứng trực quan | prompt bắt tiêu đề là câu khẳng định ≤ 12 từ; thân slide ưu tiên hình / bảng **của tài liệu**, sơ đồ so sánh, quy trình |
+| Nguyên tắc đa phương tiện (Mayer) | một ý mỗi slide, bớt chữ, lời đọc không đọc lại chữ trên slide, chú thích cạnh hình, hình + giọng | ≤ 4 dòng × ≤ 14 từ; lời đọc "giải thích thêm"; chú thích ngay dưới hình; giọng đọc theo đoạn A1..An, phụ đề + tô sáng dòng đang nói |
+| Retrieval practice | tự nhớ lại giúp nhớ lâu hơn đọc lại | slide **Câu hỏi nhanh**: câu hỏi + nút "Xem đáp án" (tự mở khi giọng đọc tới đáp án) |
+
+**Khung từng slide** (model chọn, hệ thống kiểm lại không cần model):
+
+| Khung | Điều kiện, nếu thiếu thì chuyển về `bullets` |
+|---|---|
+| `bullets` Ý chính | 2–4 dòng ngắn |
+| `image_text` Hình + ý | id hình có thật trong tài liệu và là hình thật (`is_figure`: bỏ trang scan, logo / icon < ~100×100 pt) |
+| `table` Bảng | id bảng có thật; kèm một câu rút ra |
+| `comparison` So sánh | đúng 2 cột, mỗi cột ≥ 1 ý |
+| `process` Quy trình | 3–6 bước; tên kiểu "Bước 2" được thay bằng mô tả |
+| `key_fact` Khái niệm / con số | giá trị phải **có nguyên văn** trong đoạn nguồn câu đó trích (con số không bao giờ bịa) |
+| `agenda`, `summary`, `check` | dựng bởi `outline()` |
+
+Kiểm nguồn: mọi câu có nội dung (cả tóm tắt và đáp án câu hỏi nhanh) đều được kiểm như trước. Câu dẫn dắt
+(`vai_tro=dan_dat`, nhãn `DAN_DAT`) chỉ gồm tên các slide / câu hỏi, không chứa thông tin mới, nên không gửi đi kiểm
+(vẫn chặn chỉ dẫn chèn → `TU_CHOI`). Đoạn nguồn mà model trích (`segment_id`) được đưa vào bằng chứng cho bộ kiểm
+(`check_items(hints=...)`): nhờ đó tài liệu tiếng Anh + lời đọc tiếng Việt vẫn kiểm được (trước đây BM25 không khớp từ
+nào nên ra `THIEU_NGUON` hàng loạt). Nhãn vẫn do bộ kiểm quyết theo nội dung.
+
+Slide HTML (`html_deck.py`): khung cố định 1280×720 co theo cửa sổ (xem trước = trình chiếu), lề 72px, nhãn phần +
+tiêu đề, vùng bằng chứng, chân slide "Nguồn: tr. …" + số trang, thanh tiến độ. PPTist (`slides_builder.py`) dùng
+cùng dữ liệu (`extra.cot / buoc / nhan_manh / cau_hoi`).
+
+**Chạy thật (Gemini 2.5 Flash, 28/11):** bài báo tiếng Anh 14 trang, 6 slide nội dung → 9 slide, 4 lần gọi model,
+~65 giây: 23/23 câu khớp nguồn, 2 câu dẫn dắt; khung dùng: hình (img004), quy trình 4 bước, so sánh, tóm tắt,
+câu hỏi nhanh. Logo tạp chí ở trang 1 không còn bị đưa lên slide.
 
 ## Nối BE_Zentus
 

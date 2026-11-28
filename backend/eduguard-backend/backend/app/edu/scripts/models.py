@@ -18,7 +18,8 @@ class Segment(CamelModel):
     id: str                                    # "A1", "A2"… (unique within the slide)
     text: str
     original_text: Optional[str] = None        # before the teacher's edit
-    nhan: str = "THIEU_NGUON"                  # KHOP_NGUON | SAI_NGUON | THIEU_NGUON | TU_CHOI
+    nhan: str = "THIEU_NGUON"                  # KHOP_NGUON | SAI_NGUON | THIEU_NGUON | TU_CHOI | DAN_DAT
+    vai_tro: Literal["noi_dung", "dan_dat"] = "noi_dung"   # dan_dat = lead-in built from slide titles, no new facts
     segment_id: str = ""                       # source chunk id (empty when THIEU / TU_CHOI)
     ly_do: str = ""
     de_xuat_sua: str = ""
@@ -35,7 +36,10 @@ class ScriptSlide(CamelModel):
     doan: List[Segment] = Field(default_factory=list)
     image_ids: List[str] = Field(default_factory=list)   # figures from the source doc to show on this slide
     table_ids: List[str] = Field(default_factory=list)
-    layout: Optional[str] = None               # cover | content | table | image_text | comparison | process | end
+    layout: Optional[str] = None               # see app/edu/slide_frame.py (bullets, image_text, table, comparison,
+                                               # process, key_fact, agenda, summary, check)
+    phan: str = ""                             # section label shown above the title
+    extra: Dict[str, Any] = Field(default_factory=dict)   # layout data: cot / buoc / nhan_manh / cau_hoi+dap_an
     audio: Optional[Dict[str, Any]] = None     # concatenated slide track {url, duration, markers[]}
 
 
@@ -64,6 +68,7 @@ class CreateScriptRequest(CamelModel):
     chu_de: Optional[str] = None               # generate mode: topic / focus inside the document
     so_slide: int = Field(6, ge=1, le=30)
     doan_moi_slide: int = Field(3, ge=1, le=6)
+    khung: Literal["bai_giang", "gon"] = "bai_giang"   # lesson arc (agenda/summary/check) or content only
     language: str = "Vietnamese"
 
 

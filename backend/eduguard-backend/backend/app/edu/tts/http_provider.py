@@ -56,8 +56,11 @@ class HttpTTS(TTSProvider):
     def _body(self, text: str, voice: str, speed: float) -> dict:
         # json.dumps escapes quotes/newlines in the script before it goes into the template
         esc = json.dumps(text, ensure_ascii=False)[1:-1]
-        raw = (settings.TTS_REQUEST_TEMPLATE.replace("{text}", esc)
-               .replace("{voice}", voice).replace("{speed}", str(speed)))
+        template = settings.TTS_REQUEST_TEMPLATE
+        if not voice or voice == "default":           # let the API pick its default voice
+            template = template.replace('"{voice}"', "null")
+        raw = (template.replace("{text}", esc)
+               .replace("{voice}", json.dumps(voice or "", ensure_ascii=False)[1:-1]).replace("{speed}", str(speed)))
         return json.loads(raw)
 
     async def synthesize(self, text: str, voice: str, speed: float = 1.0) -> TTSResult:

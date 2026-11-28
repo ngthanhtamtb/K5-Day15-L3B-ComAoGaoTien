@@ -91,9 +91,15 @@ def _result(index: int, text: str, nhan: str, chunk: Optional[Chunk] = None, ly_
 
 
 async def check_items(doc: ParsedDocument, items: Sequence[str], *, quiz: bool = False, need_fix: bool = False,
-                      plan: Optional[str] = None, batch_size: int = 10, k: int = 3) -> List[Dict[str, Any]]:
-    """Label every item. Returns one result per item, in order (never more, never fewer)."""
+                      plan: Optional[str] = None, batch_size: int = 10, k: int = 3,
+                      hints: Optional[Sequence[Sequence[str]]] = None) -> List[Dict[str, Any]]:
+    """Label every item. Returns one result per item, in order (never more, never fewer).
+
+    `hints[i]` = chunk ids the item claims to come from (e.g. the segment_id the generator cited). They are
+    only added to the evidence shown to the checker — the label is still decided against the text. This is
+    what makes cross-language material work (Vietnamese narration of an English paper has no keyword overlap)."""
     retriever = ChunkRetriever(doc.chunks)
+    by_id = {c.id: c for c in doc.chunks}
     results: List[Optional[Dict[str, Any]]] = [None] * len(items)
     pending: List[int] = []
     evidence: Dict[int, List[Chunk]] = {}
@@ -105,7 +111,9 @@ async def check_items(doc: ParsedDocument, items: Sequence[str], *, quiz: bool =
             note("rule", rule="injection", index=i)
             continue
         query = _STRIP_TAG.sub(" ", text)
-        hits = [c for c, s in retriever.search(query, k) if s > 0]
+        hinted = [by_id[h] for h in (hints[i] if hints and i < len(hints) else []) if h in by_id]
+        hits = hinted + [c for c, s in retriever.search(query, k) if s > 0 and c not in hinted]
+        hits = hits[: k + len(hinted)]
         if not hits:
             results[i] = _result(i, text, "THIEU_NGUON", ly_do="Không tìm thấy đoạn nào trong tài liệu nói tới nội dung này.")
             note("rule", rule="no_evidence", index=i)

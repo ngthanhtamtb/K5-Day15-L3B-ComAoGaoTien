@@ -1,6 +1,6 @@
 # ScriptGuard web UI
 
-Giao diện thuần HTML/CSS/JS dùng **ES module** của trình duyệt: không build, không framework, không npm.
+HTML/CSS/JS thuần dùng **ES module** của trình duyệt: không build, không framework, không npm.
 Backend EduGuard (`backend/eduguard-backend/backend`) phục vụ thư mục này tại `/ui`, cùng origin với API.
 
 ```
@@ -10,54 +10,55 @@ cd backend/eduguard-backend/backend
 ```
 
 API ở chỗ khác: `localStorage.setItem("eduguard.apiBase", "http://host:8077/api/v1/edu")`.
-Bản UI cũ (gọi `codebase/api.py` của prototype hackathon) giữ nguyên ở `legacy/`, mở tại `/ui/legacy/` khi chạy `codebase/api.py`.
+Bản UI của prototype hackathon (gọi `codebase/api.py`) giữ ở `legacy/`.
+
+## Thiết kế
+
+Nguồn: `design-system/scriptguard/MASTER.md` + override `pages/workspace.md` (sinh bằng skill ui-ux-pro-max).
+Minimalism & Swiss · Plus Jakarta Sans · màu chính teal `#0F766E` chữ trắng · light + dark.
+
+- **Lấy tài liệu làm trung tâm:** Tài liệu → Bài giảng (kịch bản + slide + giọng đọc) hoặc Quiz. Không có menu, chỉ breadcrumb.
+- **Progressive disclosure:** mỗi màn chỉ mở phần cần làm ("Cần xem"). Câu đã ổn, câu đã loại, nội dung tài liệu,
+  đoạn nguồn, tuỳ chọn nâng cao, tuỳ chỉnh giọng / mẫu đều gập trong `<details>`.
+- **Một nút chính mỗi màn**, đổi theo trạng thái: "Kiểm lại N câu" → "Áp dụng N đề xuất sửa" → "Sang slide & giọng đọc";
+  "Tạo / Cập nhật giọng đọc"; "Tải đề PDF".
+- **Không có bước chờ duyệt:** mọi câu được dùng trừ câu giáo viên bỏ hoặc câu chứa chỉ dẫn chèn (tự loại).
+  Câu khớp nguồn không cần bấm gì. Bỏ câu có "Hoàn tác".
+- Trạng thái luôn là chấm màu + chữ (không chỉ dựa vào màu); nút tối thiểu 44px; skeleton thay cho spinner.
 
 ## Cấu trúc
 
 ```
-index.html            khung trang, nạp css/* và js/main.js
-css/
-  tokens.css          màu (theo prototype) + dark mode
-  base.css            reset, layout, thanh trên
-  components.css      nút, form, badge, stepper, panel nguồn, toast, Agent verify
-  screens.css         bố cục riêng từng màn (review split, slide studio, quiz…)
+index.html
+css/      tokens.css (màu, font, khoảng cách, dark mode) · base.css · components.css · screens.css
 js/
   main.js             router + khung; thêm màn = 1 dòng trong ROUTES
-  config.js           apiBase, chu kỳ poll job
-  core/  dom.js       h() dựng DOM (chỉ text node, không innerHTML), icon, htmlToText
-         router.js    hash router "#/scripts/:id"
-         store.js     store dùng chung (trace, toast, gói) + prefs (localStorage, không bắt buộc)
-         format.js    định dạng thời gian, số, chi phí
-  api/   http.js      fetch + lỗi theo format backend
-         edu.js       MỌI endpoint /api/v1/edu (màn hình không tự ghép URL)
-  components/         ui.js (badge, nút, busy, stepper…), shell, agentPanel, sourcePanel,
-                      audioTrack (track A1..An), slideCanvas (vẽ JSON PPTist chỉ đọc)
-  screens/            library · document · scriptNew · scriptReview · slideStudio · quizNew · quizReview
+  config.js
+  core/               dom.js (h(): chỉ text node, không innerHTML) · router.js · store.js (trace, toast + hoàn tác, prefs) · format.js
+  api/                http.js · edu.js (MỌI endpoint /api/v1/edu)
+  components/         ui.js (button, busy, disclosure, healthBar, tag, skeleton…) · shell.js · agentPanel.js
+                      claimCard.js (thẻ "cần xem" + dòng gọn) · sourcePanel.js · audioTrack.js · slideCanvas.js
+  screens/            home.js · document.js · lesson.js (+ lessonScript.js, lessonSlides.js) · quiz.js
 ```
 
-## Màn hình ↔ endpoint
+## Màn hình
 
-| Màn | Route | Endpoint chính |
-|---|---|---|
-| Thư viện | `#/` | `GET /documents` `/scripts` `/quizzes` · `POST /documents` (MD/TXT/DOCX) · `POST /documents/async` + `/jobs/{id}` (PDF/PPTX) |
-| Tài liệu | `#/documents/:docId` | `GET /documents/{id}` — đoạn nguồn, hình, bảng |
-| Tạo kịch bản | `#/scripts/new?doc=` | `POST /scripts` (dán `noiDung` hoặc sinh theo `chuDe`) |
-| Rà soát (cổng 1) | `#/scripts/:id` | `/decisions` · `/accept-matching` · `/submit` |
-| Slide & giọng (cổng 2) | `#/scripts/:id/slides` | `/slides` · `/voice/estimate` · `/voice` + `/jobs/{id}` · `/revise` · `GET /templates`, `/voice/voices` |
-| Tạo quiz | `#/quizzes/new?doc=` | `POST /documents/{id}/quiz/generate` |
-| Kiểm quiz | `#/quizzes/:id` | `/decision` · `PATCH` câu + `/verify` · `/evaluate` · `/fixes/*` · `/submit` · `/pdf?answers=` |
-
-Mọi response có gọi model trả kèm `trace`; màn hình chuyển cho `setTrace()` để panel "Agent đã kiểm gì" hiển thị.
+| Màn | Route | Mặc định hiện | Gập lại |
+|---|---|---|---|
+| Tài liệu | `#/` | danh sách tài liệu + bài giảng / quiz kèm số "cần xem" (lần đầu: vùng kéo thả) | — |
+| Một tài liệu | `#/documents/:id` (`?create=lesson\|quiz`) | "Tạo bài giảng": AI đề xuất kịch bản → kiểm nguồn → hình/bảng → giọng → slide HTML, một job có tiến độ | chủ đề, tên; "dán kịch bản có sẵn"; nội dung đã đọc |
+| Bài giảng · Kịch bản | `#/scripts/:id` | câu cần xem (lý do, đề xuất) + thanh tỉ lệ nhãn | đoạn nguồn, câu ổn, câu đã loại |
+| Bài giảng · Slide | `#/scripts/:id/slides` | slide HTML thật (iframe sandbox) + nút tạo giọng / mở slide | giọng & tốc độ, lời đọc từng slide (sửa tại chỗ) |
+| Quiz | `#/quizzes/:id` | câu cần xem kèm phương án, lý do, gợi ý | câu ổn, câu đã bỏ, giải thích, đoạn nguồn |
 
 ## Thêm một màn
 
-1. Tạo `js/screens/<ten>.js` export `mount(el, { params, query })`, trả về hàm dọn dẹp nếu có listener toàn cục.
-2. Thêm endpoint vào `js/api/edu.js` (nếu cần).
-3. Thêm một dòng vào `ROUTES` trong `js/main.js` (màn được tải lười bằng `import()`).
+1. Tạo `js/screens/<ten>.js` export `mount(el, { params, query, shell })`; gọi `shell.setCrumbs([...])`; trả về hàm dọn dẹp nếu cần.
+2. Thêm endpoint vào `js/api/edu.js`.
+3. Thêm một dòng vào `ROUTES` trong `js/main.js`.
 
 ## Quy tắc
 
-- Không dùng `innerHTML` / `insertAdjacentHTML`: dữ liệu từ API luôn là text node (`h()`); HTML của slide qua `htmlToText()`.
-- Không có nút / đường nào "xuất bản": trạng thái cuối luôn là chờ duyệt.
-- Câu `TU_CHOI` không có nút chấp nhận; "chấp nhận hàng loạt" chỉ áp dụng câu Khớp nguồn.
-- Chỉ hiển thị số API trả về (token, chi phí); thiếu giá thì ghi "chưa có giá", không tự tính.
+- Không `innerHTML` / `insertAdjacentHTML`: dữ liệu API luôn là text node; HTML của slide qua `htmlToText()`.
+- Không có nút "xuất bản" / "gửi duyệt".
+- Chỉ hiện số API trả về (token, chi phí); chưa có giá thì ghi "chưa cấu hình giá".

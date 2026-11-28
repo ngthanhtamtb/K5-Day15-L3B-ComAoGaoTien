@@ -21,17 +21,17 @@ export const documents = {
   get: (docId, includeBlocks = false) => request("GET", `/documents/${enc(docId)}`, { query: { include_blocks: includeBlocks } }),
   page: (docId, page) => request("GET", `/documents/${enc(docId)}/pages/${page}`),
   search: (docId, q, k = 5) => request("GET", `/documents/${enc(docId)}/search`, { query: { q, k } }),
+  /** document -> proposed script (checked) + figures/tables + narrated HTML slides, as one background job */
+  deck: (docId, body) => request("POST", `/documents/${enc(docId)}/deck`, { body }),
 };
 
-/* ---------------------------------------------------------------- scripts (gate 1 / gate 2) */
+/* ---------------------------------------------------------------- scripts (label · fix · drop — no approval step) */
 export const scripts = {
   list: () => request("GET", "/scripts").then((r) => r.data),
   create: (body) => request("POST", "/scripts", { body }),
   get: (id) => request("GET", `/scripts/${enc(id)}`).then((r) => r.data),
   decide: (id, decisions) => request("POST", `/scripts/${enc(id)}/decisions`, { body: { decisions } }),
-  acceptMatching: (id) => request("POST", `/scripts/${enc(id)}/accept-matching`).then((r) => r.data),
-  submit: (id) => request("POST", `/scripts/${enc(id)}/submit`).then((r) => r.data),
-  revise: (id, slide, segment, text) => request("POST", `/scripts/${enc(id)}/revise`, { body: { slide, segment, text } }),
+  html: (id) => request("POST", `/scripts/${enc(id)}/html`).then((r) => r.data),
   buildSlides: (id, template) => request("POST", `/scripts/${enc(id)}/slides`, { body: { template } }).then((r) => r.data),
   voiceEstimate: (id, voice, speed) => request("POST", `/scripts/${enc(id)}/voice/estimate`, { body: { voice, speed } }).then((r) => r.data),
   startVoice: (id, voice, speed) => request("POST", `/scripts/${enc(id)}/voice`, { body: { voice, speed } }),
@@ -52,7 +52,6 @@ export const quizzes = {
   reverify: (id, qid) => request("POST", `/quizzes/${enc(id)}/questions/${enc(qid)}/verify`),
   applyFix: (id, qid, fixId, undo = false) =>
     request("POST", `/quizzes/${enc(id)}/questions/${enc(qid)}/fixes/${enc(fixId)}/${undo ? "undo" : "apply"}`),
-  submit: (id) => request("POST", `/quizzes/${enc(id)}/submit`).then((r) => r.data),
   pdfUrl: (id, answers) => apiUrl(`/quizzes/${enc(id)}/pdf`, { answers: answers ? "true" : "false" }),
 };
 

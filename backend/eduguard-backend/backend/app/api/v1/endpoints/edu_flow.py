@@ -1,7 +1,8 @@
 """EduGuard review flow (mounted at /api/v1/edu, next to edu.py):
 
-  documents (async ingest job) · verify · scripts (gate 1) · slides from script · voice
-  (estimate / job / per-segment timeline) · quiz gates · jobs (+SSE) · plans · LLM status
+  documents (async ingest job) · verify · scripts (label, fix, drop) · slides from script · voice
+  (estimate / job / per-segment timeline) · quiz review · jobs (+SSE) · plans · LLM status
+  No approval step: nothing is gated on a status and nothing is published.
 
 Every response that ran a model carries `trace` (steps, model calls, tokens, cost) for the
 "Agent verify" panel. Login is optional: anonymous users get the default plan.
@@ -9,7 +10,7 @@ Every response that ran a model carries `trace` (steps, model calls, tokens, cos
 from __future__ import annotations
 
 import json
-from typing import List, Optional
+from typing import Literal, List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
@@ -162,21 +163,13 @@ async def script_accept_matching(script_id: str):
         _http(e)
 
 
-@router.post("/scripts/{script_id}/submit", summary="Gate 1 done -> status cho_duyet (409 if undecided segments)")
-async def script_submit(script_id: str):
-    try:
-        return {"data": _script_out(scripts.submit(script_id))}
-    except Exception as e:
-        _http(e)
-
-
 class ReviseBody(BaseModel):
     slide: int
     segment: str
     text: str = Field(..., min_length=1, max_length=4000)
 
 
-@router.post("/scripts/{script_id}/revise", summary="Gate 2: edit a segment after submit -> re-checked, suggestion with source")
+@router.post("/scripts/{script_id}/revise", summary="Edit one segment from the slide view -> re-checked, suggestion with source")
 async def script_revise(script_id: str, body: ReviseBody, ctx: PlanContext = Depends(plan_context)):
     try:
         with collect() as trace:
@@ -228,14 +221,11 @@ class BuildSlidesBody(BaseModel):
     template: str = "template_1"
 
 
-@router.post("/scripts/{script_id}/slides", summary="Approved script -> PPTist slides (source figures, labels, audio)")
+@router.post("/scripts/{script_id}/slides", summary="Script -> PPTist slides (dropped segments excluded; source figures, labels, audio)")
 async def script_slides(script_id: str, body: BuildSlidesBody = BuildSlidesBody()):
     from app.edu.slides_builder import build_slides
     try:
-        sc = scripts.get(script_id)
-        if sc.status != "cho_duyet":
-            raise scripts.Conflict("kịch bản chưa qua cổng 1 (status phải là cho_duyet)")
-        return {"data": await build_slides(sc, body.template)}
+        return {"data": await build_slides(scripts.get(script_id), body.template)}
     except Exception as e:
         _http(e)
 
@@ -258,21 +248,22 @@ async def script_voice_estimate(script_id: str, body: VoiceBody = VoiceBody(), c
     return {"data": est}
 
 
-@router.post("/scripts/{script_id}/voice", summary="Voice the approved script as a background job (poll /jobs/{id})")
+@router.post("/scripts/{script_id}/voice", summary="Voice the script as a background job (poll /jobs/{id})")
 async def script_voice(script_id: str, body: VoiceBody = VoiceBody(), ctx: PlanContext = Depends(plan_context)):
     from app.edu.voice.script_voice import voice_script
     ctx.require("voice")
     try:
-        sc = scripts.get(script_id)
-        if sc.status != "cho_duyet":
-            raise scripts.Conflict("chỉ sinh giọng cho kịch bản đã qua cổng 1 (status = cho_duyet)")
+        scripts.get(script_id)
     except Exception as e:
         _http(e)
 
     async def run(job):
         bg = ctx.for_background()
         try:
-            return await voice_script(script_id, body.voice, body.speed, job=job, plan_ctx=bg)
+            result = await voice_script(script_id, body.voice, body.speed, job=job, plan_ctx=bg)
+            from app.edu.deck import render_html
+            result["htmlUrl"] = render_html(script_id)        # the HTML deck now carries the audio
+            return result
         finally:
             bg.db.close()
 
@@ -280,8 +271,50 @@ async def script_voice(script_id: str, body: VoiceBody = VoiceBody(), ctx: PlanC
     return {"jobId": job.id, "status": job.status, "quotaWarnings": ctx.warnings}
 
 
+# =========================================================================== one-step deck
+class DeckBody(BaseModel):
+    so_slide: int = Field(6, ge=1, le=30, alias="soSlide")
+    chu_de: Optional[str] = Field(None, alias="chuDe")
+    title: Optional[str] = None
+    voice: Optional[str] = None
+    speed: float = Field(1.0, ge=0.5, le=2.0)
+    narrate: bool = True
+    khung: Literal["bai_giang", "gon"] = "bai_giang"   # full lesson arc or content slides only
+    model_config = {"populate_by_name": True}
+
+
+@router.post("/documents/{doc_id}/deck", summary="Document -> checked, narrated HTML slide deck (background job)")
+async def document_deck(doc_id: str, body: DeckBody = DeckBody(), ctx: PlanContext = Depends(plan_context)):
+    from app.edu.deck import build_deck
+    if not docparse.load(doc_id):
+        raise HTTPException(404, "document not found")
+    if body.narrate:
+        ctx.require("voice")
+    route = _route(ctx)
+
+    async def run(job):
+        bg = ctx.for_background()
+        try:
+            return await build_deck(doc_id, so_slide=body.so_slide, chu_de=body.chu_de, title=body.title, voice=body.voice,
+                                    speed=body.speed, narrate=body.narrate, khung=body.khung, job=job, plan=route, plan_ctx=bg)
+        finally:
+            bg.db.close()
+
+    job = jobs.submit("deck", run, owner=ctx.uid, meta={"docId": doc_id})
+    return {"jobId": job.id, "status": job.status, "quotaWarnings": ctx.warnings}
+
+
+@router.post("/scripts/{script_id}/html", summary="Re-render the HTML deck (after edits); no model call")
+async def script_html(script_id: str):
+    from app.edu.deck import render_html
+    try:
+        return {"data": {"htmlUrl": render_html(script_id)}}
+    except Exception as e:
+        _http(e)
+
+
 # =========================================================================== quiz gates
-@router.post("/quizzes/{quiz_id}/questions/{question_id}/decision", summary="Gate decision for one question")
+@router.post("/quizzes/{quiz_id}/questions/{question_id}/decision", summary="Keep / drop / reset one question")
 async def quiz_decision(quiz_id: str, question_id: str, req: QuestionDecisionRequest):
     try:
         return {"data": quiz_service.decide(quiz_id, question_id, req.action).model_dump(by_alias=True)}
@@ -289,7 +322,7 @@ async def quiz_decision(quiz_id: str, question_id: str, req: QuestionDecisionReq
         _http(e)
 
 
-@router.post("/quizzes/{quiz_id}/questions/{question_id}/verify", summary="Gate 2: re-check an edited question")
+@router.post("/quizzes/{quiz_id}/questions/{question_id}/verify", summary="Re-check one question against the source")
 async def quiz_reverify(quiz_id: str, question_id: str, ctx: PlanContext = Depends(plan_context)):
     try:
         with collect() as trace:
@@ -299,12 +332,7 @@ async def quiz_reverify(quiz_id: str, question_id: str, ctx: PlanContext = Depen
     return _with(q.model_dump(by_alias=True), trace, ctx)
 
 
-@router.post("/quizzes/{quiz_id}/submit", summary="All questions decided -> status cho_duyet")
-async def quiz_submit(quiz_id: str):
-    try:
-        return {"data": quiz_service.submit(quiz_id).model_dump(by_alias=True)}
-    except Exception as e:
-        _http(e)
+
 
 
 # =========================================================================== jobs

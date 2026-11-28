@@ -48,7 +48,7 @@ function line(el) {
   return h("div", { class: "pp-el", style: { left: `${el.left || 0}px`, top: `${el.top || 0}px` } }, svg);
 }
 
-export function slideCanvas(slide, { width = 1000, height = 562.5, highlight } = {}) {
+export function slideCanvas(slide, { width = 1000, height = 562.5, highlight, thumb = false } = {}) {
   const stage = h("div", { class: "pp-stage", style: { width: `${width}px`, height: `${height}px` } });
   const bg = slide.background || {};
   if (bg.type === "solid" && bg.color) stage.style.background = bg.color;
@@ -70,7 +70,8 @@ export function slideCanvas(slide, { width = 1000, height = 562.5, highlight } =
   if (highlight) stage.classList.add("is-highlight");
 
   // Scale the fixed-size stage to the available width.
-  const frame = h("div", { class: "pp-frame", style: { aspectRatio: `${width} / ${height}` } }, stage);
+  const frame = h("div", { class: `pp-frame${thumb ? " pp-frame--thumb" : ""}`, style: { aspectRatio: `${width} / ${height}` },
+    "aria-hidden": thumb ? "true" : null }, stage);
   const fit = () => {
     const w = frame.clientWidth;
     if (w) stage.style.transform = `scale(${w / width})`;

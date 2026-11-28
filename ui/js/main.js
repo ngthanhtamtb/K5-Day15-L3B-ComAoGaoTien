@@ -1,19 +1,22 @@
-/* Entry point: shell + router. Adding a screen = one line in ROUTES + one file in screens/. */
+/* Entry point: shell + router. Adding a screen = one line in ROUTES + one file in screens/.
+ * Information architecture: Document → (Lesson workspace | Quiz). No approval step anywhere. */
 import { system } from "./api/edu.js";
 import { h, replace } from "./core/dom.js";
 import { createRouter, go } from "./core/router.js";
 import { store } from "./core/store.js";
 import { createShell } from "./components/shell.js";
-import { button, empty, spinner } from "./components/ui.js";
+import { button, empty, skeleton } from "./components/ui.js";
 
+const lesson = () => import("./screens/lesson.js");
 const ROUTES = [
-  { name: "library", path: "/", load: () => import("./screens/library.js"), title: "Thư viện" },
+  { name: "home", path: "/", load: () => import("./screens/home.js"), title: "Tài liệu" },
   { name: "document", path: "/documents/:docId", load: () => import("./screens/document.js"), title: "Tài liệu" },
-  { name: "scriptNew", path: "/scripts/new", load: () => import("./screens/scriptNew.js"), title: "Tạo kịch bản" },
-  { name: "slides", path: "/scripts/:id/slides", load: () => import("./screens/slideStudio.js"), title: "Slide & giọng đọc" },
-  { name: "script", path: "/scripts/:id", load: () => import("./screens/scriptReview.js"), title: "Rà soát kịch bản" },
-  { name: "quizNew", path: "/quizzes/new", load: () => import("./screens/quizNew.js"), title: "Tạo quiz" },
-  { name: "quiz", path: "/quizzes/:id", load: () => import("./screens/quizReview.js"), title: "Kiểm quiz" },
+  { name: "slides", path: "/scripts/:id/slides", load: lesson, title: "Slide & giọng đọc", extra: { tab: "slides" } },
+  { name: "script", path: "/scripts/:id", load: lesson, title: "Bài giảng", extra: { tab: "script" } },
+  { name: "quiz", path: "/quizzes/:id", load: () => import("./screens/quiz.js"), title: "Quiz" },
+  // old links: creation now opens in place on the document page
+  { name: "legacyNew", path: "/scripts/new", redirect: (q) => (q.doc ? `/documents/${q.doc}?create=lesson` : "/") },
+  { name: "legacyQuizNew", path: "/quizzes/new", redirect: (q) => (q.doc ? `/documents/${q.doc}?create=quiz` : "/") },
   { name: "notFound", path: "/__404__", load: null, title: "Không tìm thấy" },
 ];
 
@@ -22,23 +25,23 @@ let cleanup = null;
 let navToken = 0;
 
 const router = createRouter(ROUTES, {
-  async onChange({ route, params, query, path }) {
+  async onChange({ route, params, query }) {
+    if (route.redirect) return go(route.redirect(query));
     const token = ++navToken;
     if (typeof cleanup === "function") cleanup();
     cleanup = null;
-    shell.setActive(path);
     document.title = `${route.title} · ScriptGuard`;
     const outlet = shell.outlet;
     if (!route.load) {
-      replace(outlet, empty("Trang không tồn tại.", button("Về thư viện", { kind: "primary", onClick: () => go("/") })));
-      return;
+      shell.setCrumbs([{ label: "Không tìm thấy" }]);
+      return replace(outlet, empty("Trang này không tồn tại.", button("Về danh sách tài liệu", { kind: "primary", onClick: () => go("/") })));
     }
-    replace(outlet, spinner());
+    replace(outlet, skeleton(4, 32));
     const mod = await route.load();
-    if (token !== navToken) return;                 // user navigated again while loading
+    if (token !== navToken) return;
     const view = h("div", { class: "screen" });
     replace(outlet, view);
-    cleanup = mod.mount(view, { params, query }) || null;
+    cleanup = mod.mount(view, { params, query, shell, ...(route.extra || {}) }) || null;
     outlet.focus({ preventScroll: true });
     window.scrollTo(0, 0);
   },

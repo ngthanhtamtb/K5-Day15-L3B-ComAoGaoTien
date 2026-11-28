@@ -1,6 +1,6 @@
-"""Voice an approved script: one clip per segment (A1..An), one track per slide with markers.
+"""Voice a script: one clip per segment (A1..An), one track per slide with markers.
 
-* Only segments accepted / edited at gate 1 are voiced (never TU_CHOI / rejected ones).
+* Every included segment is voiced (never dropped ones or injected instructions).
 * Clips are cached by (provider, voice, speed, text): re-running after editing one segment
   only bills that segment; slide tracks are re-assembled from cached clips (free).
 * Segment start/end on the track come from real clip durations. Sentence timings inside a
@@ -25,7 +25,7 @@ from .limits import estimate, estimate_seconds, sentence_timings
 def approved_segments(sc: Script):
     for slide in sc.slides:
         for seg in slide.doan:
-            if seg.quyet_dinh in ("chap_nhan", "da_sua") and seg.nhan != "TU_CHOI":
+            if scripts.included(seg):
                 yield slide, seg
 
 
@@ -57,11 +57,9 @@ def _assemble_track(clips: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
 async def voice_script(script_id: str, voice: Optional[str] = None, speed: float = 1.0, job=None,
                        plan_ctx=None) -> Dict[str, Any]:
     sc = scripts.get(script_id)
-    if sc.status != "cho_duyet":
-        raise scripts.Conflict("chỉ sinh giọng cho kịch bản đã qua cổng 1 (status = cho_duyet)")
     pairs = list(approved_segments(sc))
     if not pairs:
-        raise scripts.Invalid("không có đoạn nào đã chấp nhận để sinh giọng")
+        raise scripts.Invalid("không còn đoạn nào để sinh giọng (mọi đoạn đã bị bỏ)")
     voice = voice or settings.TTS_DEFAULT_VOICE
     done = 0
 

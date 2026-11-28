@@ -47,7 +47,7 @@ def fake_handler(calls):
                 else:
                     out.append({"index": int(idx), "nhan": "KHOP_NGUAN", "segment_id": chunk_ids[-1], "ly_do": "khớp"})
             return json.dumps({"ket_qua": out}, ensure_ascii=False)
-        if "Soạn" in text and "slide" in text:
+        if "slide NỘI DUNG" in text:
             return json.dumps({"title": "RAG", "slides": [
                 {"tieu_de": "RAG là gì", "y_chinh": ["Truy xuất", "Đưa vào prompt"], "layout": "content",
                  "image_ids": ["img999"], "table_ids": [],
@@ -133,9 +133,11 @@ def test_script_gate1_slides_voice(client):
     sc = c.post(f"/api/v1/edu/scripts/{sid}/accept-matching").json()["data"]
     assert _seg(sc, 0, "RAG truy xuất")["quyetDinh"] == "chap_nhan"
     assert _seg(sc, 0, "Tăng temperature")["quyetDinh"] == "chua_quyet"
-    assert c.post(f"/api/v1/edu/scripts/{sid}/submit").status_code == 409
-    # slides/voice refused before gate 1 is done
-    assert c.post(f"/api/v1/edu/scripts/{sid}/slides", json={}).status_code == 409
+    # no approval step: slides can be built at any time; TU_CHOI never reaches them
+    early = c.post(f"/api/v1/edu/scripts/{sid}/slides", json={}).json()["data"]["slides"]
+    early_segs = [g for s in early if s["eduguard"]["kind"] == "content" for g in s["eduguard"]["segments"]]
+    assert early_segs and all(g["nhan"] != "TU_CHOI" for g in early_segs)
+    assert c.post(f"/api/v1/edu/scripts/{sid}/submit").status_code in (404, 405)   # endpoint removed
 
     wrong = _seg(sc, 0, "Tăng temperature")
     r = c.post(f"/api/v1/edu/scripts/{sid}/decisions", json={"decisions": [
@@ -147,17 +149,14 @@ def test_script_gate1_slides_voice(client):
     sc = r.json()["data"]
     edited = _seg(sc, 0, "Giảm temperature")
     assert edited["quyetDinh"] == "da_sua" and edited["nhan"] == "KHOP_NGUON" and edited["originalText"]
-    sc = c.post(f"/api/v1/edu/scripts/{sid}/submit").json()["data"]
-    assert sc["status"] == "cho_duyet"
-    assert c.post(f"/api/v1/edu/scripts/{sid}/decisions", json={"decisions": [
-        {"slide": 0, "segment": "A1", "action": "reset"}]}).status_code == 409
 
-    # slides from the approved script: only accepted/edited segments, labels carried along
+    # slides: dropped segments excluded, labels carried along
     slides = c.post(f"/api/v1/edu/scripts/{sid}/slides", json={"template": "template_1"}).json()["data"]["slides"]
     kinds = [s["eduguard"]["kind"] for s in slides]
     assert kinds[0] == "cover" and kinds[-1] == "end" and "content" in kinds
     content = next(s for s in slides if s["eduguard"]["kind"] == "content")
-    assert content["remark"] and all(g["quyetDinh"] in ("chap_nhan", "da_sua") for g in content["eduguard"]["segments"])
+    assert content["remark"] and all(g["quyetDinh"] != "tu_choi_cau" for g in content["eduguard"]["segments"])
+    assert kinds.count("content") == 1        # slide 2 had only dropped segments -> no content slide for it
 
     # voice: estimate first, then a background job
     est = c.post(f"/api/v1/edu/scripts/{sid}/voice/estimate", json={}).json()["data"]
@@ -203,7 +202,7 @@ def test_verify_downgrades_invented_segment_id(client):
     assert res["nhan"] == "THIEU_NGUON" and "không có trong các đoạn đã tra" in res["lyDo"]
 
 
-def test_quiz_generate_verify_decide_submit(client):
+def test_quiz_generate_verify_keep_drop_pdf_excludes_dropped(client):
     doc_id = _upload(client)
     r = client.post(f"/api/v1/edu/documents/{doc_id}/quiz/generate", json={"numQuestions": 1})
     assert r.status_code == 200, r.text
@@ -213,22 +212,21 @@ def test_quiz_generate_verify_decide_submit(client):
     assert q["sourceChunkIds"] and all(not cid.endswith("C777") for cid in q["sourceChunkIds"])  # invented id dropped
     assert q["verdict"]["nhan"] == "SAI_NGUON"                     # chosen answer A contradicts the source
     qid, quiz_id = q["id"], qs["id"]
-    assert client.post(f"/api/v1/edu/quizzes/{quiz_id}/submit").status_code == 409
+    assert client.post(f"/api/v1/edu/quizzes/{quiz_id}/submit").status_code in (404, 405)   # no approval step
+    pdf_all = client.get(f"/api/v1/edu/quizzes/{quiz_id}/pdf?answers=true").content
     assert client.post(f"/api/v1/edu/quizzes/{quiz_id}/questions/{qid}/decision",
-                       json={"action": "accept"}).status_code == 200
-    assert client.post(f"/api/v1/edu/quizzes/{quiz_id}/submit").json()["data"]["status"] == "cho_duyet"
+                       json={"action": "reject"}).json()["data"]["decision"] == "tu_choi_cau"
+    pdf_dropped = client.get(f"/api/v1/edu/quizzes/{quiz_id}/pdf?answers=true").content
+    assert len(pdf_dropped) < len(pdf_all)                      # the dropped question is not printed
 
 
-def test_library_lists_gate2_revise_and_quiz_pdf(client):
+def test_library_lists_revise_anytime_and_quiz_pdf(client):
     c = client
     doc_id = _upload(c)
     assert any(d["docId"] == doc_id for d in c.get("/api/v1/edu/documents").json()["data"])
     sc = c.post("/api/v1/edu/scripts", json={"docId": doc_id, "noiDung": "RAG truy xuất các đoạn tài liệu liên quan."}).json()["data"]
     sid = sc["id"]
-    # gate 2 only after submit
-    assert c.post(f"/api/v1/edu/scripts/{sid}/revise", json={"slide": 0, "segment": "A1", "text": "x"}).status_code == 409
-    c.post(f"/api/v1/edu/scripts/{sid}/accept-matching")
-    assert c.post(f"/api/v1/edu/scripts/{sid}/submit").json()["data"]["status"] == "cho_duyet"
+    # editing from the slide view works at any time (no approval step to pass first)
     r = c.post(f"/api/v1/edu/scripts/{sid}/revise",
                json={"slide": 0, "segment": "A1", "text": "Tăng temperature làm câu trả lời ổn định hơn."})
     seg = r.json()["data"]["slides"][0]["doan"][0]
@@ -243,3 +241,45 @@ def test_library_lists_gate2_revise_and_quiz_pdf(client):
     for answers in ("false", "true"):
         r = c.get(f"/api/v1/edu/quizzes/{qs['id']}/pdf?answers={answers}")
         assert r.status_code == 200 and r.headers["content-type"] == "application/pdf" and r.content[:4] == b"%PDF"
+
+
+def test_one_step_deck_from_document_with_media_and_voice(client):
+    """Document -> deck job: drafted, checked, figures attached from cited chunks, voiced, HTML rendered."""
+    import asyncio
+    from app.edu import docparse
+    from tests.fixtures import make_pdf
+    c = client
+    doc = asyncio.run(docparse.ingest(make_pdf(), "bai7.pdf"))
+    first_chunk_with_img = next(ch for ch in doc.chunks if ch.image_ids)
+    from app.core.llm import llm
+    from app.core.llm.providers import FakeProvider
+    base = llm.providers["fake"].handler
+
+    def handler(model, req):
+        text = "\n".join(p.text for p in req.parts() if p.type == "text")
+        if "slide NỘI DUNG" in text:       # draft that cites the chunk with the figure, no image picked
+            return json.dumps({"title": "RAG", "slides": [{"tieu_de": "RAG", "y_chinh": ["Truy xuất"], "layout": "content",
+                "image_ids": [], "table_ids": [], "doan": [{"text": "RAG truy xuat cac doan tai lieu lien quan.", "segment_id": first_chunk_with_img.id}]}]})
+        return base(model, req)
+
+    llm.register("fake", FakeProvider(handler))
+    start = c.post(f"/api/v1/edu/documents/{doc.doc_id}/deck", json={"soSlide": 1}).json()
+    snap = _wait(c, start["jobId"])
+    assert snap["status"] == "done", snap
+    r = snap["result"]
+    assert r["htmlUrl"].endswith(".html") and r["voice"] and r["voice"]["totalDuration"] > 0 and r["voiceError"] is None
+    sc = c.get(f"/api/v1/edu/scripts/{r['scriptId']}").json()["data"]
+    assert sc["slides"][0]["imageIds"]                          # figure attached from the cited chunk
+    html = c.get(r["htmlUrl"].replace("http://localhost:8077", "")).text
+    assert "<figure><img" in html and '"markers"' in html and "RAG truy xuat" in html
+    assert "<script>alert" not in html
+    assert c.post(f"/api/v1/edu/scripts/{r['scriptId']}/html").json()["data"]["htmlUrl"] == r["htmlUrl"]
+
+
+def test_html_deck_escapes_document_text():
+    from app.edu import html_deck
+    from app.edu.scripts.models import Script, ScriptSlide, Segment
+    sc = Script(id="scr_x", doc_id="d", title="<b>T</b>", slides=[ScriptSlide(index=0, tieu_de="<img src=x onerror=alert(1)>",
+        doan=[Segment(id="A1", text="</script><script>alert(1)</script>", nhan="KHOP_NGUON")])])
+    html = html_deck.render(sc, None)
+    assert "<img src=x" not in html and "</script><script>alert(1)" not in html and "&lt;b&gt;T&lt;/b&gt;" in html

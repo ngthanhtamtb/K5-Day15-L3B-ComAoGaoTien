@@ -1,66 +1,66 @@
-/* Design tokens — palette from the ScriptGuard prototype, plus a dark theme. */
+/* Design tokens — design-system/scriptguard (MASTER + pages/workspace.md override).
+ * Minimalism & Swiss · Plus Jakarta Sans · teal primary with white text (≈5.5:1). */
 :root {
   color-scheme: light;
-  --bg: #F8FAFC;
+  --bg: #F8FAFA;
   --surface: #FFFFFF;
-  --surface-2: #F1F5F9;
-  --ink: #0F172A;
-  --ink-2: #334155;
-  --muted: #475569;
-  --line: #E4E7EB;
-  --line-strong: #CBD5E1;
-  --brand: #1E3A5F;
-  --brand-hover: #162C49;
-  --brand-ink: #FFFFFF;
-  --focus: #2563EB;
-  --link: #1D4ED8;
+  --surface-2: #F1F5F5;
+  --ink: #0F1F1E;
+  --ink-2: #334544;
+  --muted: #5B6B6A;
+  --line: #E3E9E8;
+  --line-strong: #C9D4D3;
+  --primary: #0F766E;
+  --primary-hover: #115E59;
+  --on-primary: #FFFFFF;
+  --primary-soft: #E6F4F2;
+  --focus: #0D9488;
+  --link: #0F766E;
 
-  --ok-bg: #DCFCE7;   --ok-fg: #065F46;   --ok-bd: #86EFAC;   --ok-dot: #059669;
-  --bad-bg: #FEE2E2;  --bad-fg: #991B1B;  --bad-bd: #FCA5A5;  --bad-dot: #DC2626;
-  --warn-bg: #FEF3C7; --warn-fg: #92400E; --warn-bd: #FCD34D; --warn-dot: #D97706;
-  --info-bg: #EFF6FF; --info-fg: #1E3A8A; --info-bd: #BFDBFE;
-  --fix-bg: #FFEDD5;  --fix-fg: #9A3412;  --fix-bd: #FDBA74;
-  --refuse-bg: #E2E8F0; --refuse-fg: #334155; --refuse-bd: #CBD5E1;
+  --ok: #047857;   --ok-soft: #E7F6EF;   --ok-line: #A7E3C6;
+  --bad: #B91C1C;  --bad-soft: #FDECEC;  --bad-line: #F5B5B5;
+  --warn: #B45309; --warn-soft: #FDF3E3; --warn-line: #F3CF94;
+  --refuse: #475569; --refuse-soft: #EEF1F4; --refuse-line: #CBD5E1;
 
-  --font-sans: "Fira Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-mono: "Fira Code", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  --radius: 10px;
-  --radius-sm: 6px;
-  --shadow: 0 1px 2px rgb(15 23 42 / 6%), 0 4px 14px rgb(15 23 42 / 6%);
-  --gutter: 24px;
-  --panel-w: 420px;
+  --font: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --space-xs: 4px; --space-sm: 8px; --space-md: 16px; --space-lg: 24px; --space-xl: 32px; --space-2xl: 48px;
+  --radius: 12px; --radius-sm: 8px;
+  --shadow-sm: 0 1px 2px rgb(15 31 30 / 6%);
+  --shadow-lg: 0 10px 28px rgb(15 31 30 / 14%);
+  --ease: cubic-bezier(.2, .8, .2, 1);
+  --t: 180ms;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --bg: #0B1220; --surface: #111A2C; --surface-2: #17233A;
-    --ink: #E5ECF6; --ink-2: #C3CEDD; --muted: #94A3B8;
-    --line: #223047; --line-strong: #31425E;
-    --brand: #93B4E0; --brand-hover: #B5CDEE; --brand-ink: #0B1220;
-    --focus: #60A5FA; --link: #93C5FD;
-    --ok-bg: #0F2E22; --ok-fg: #86EFAC; --ok-bd: #1F6B45; --ok-dot: #34D399;
-    --bad-bg: #3A1418; --bad-fg: #FCA5A5; --bad-bd: #7F1D1D; --bad-dot: #F87171;
-    --warn-bg: #3A2A0B; --warn-fg: #FCD34D; --warn-bd: #92400E; --warn-dot: #FBBF24;
-    --info-bg: #0F2140; --info-fg: #BFDBFE; --info-bd: #1E40AF;
-    --fix-bg: #3A2210; --fix-fg: #FDBA74; --fix-bd: #9A3412;
-    --refuse-bg: #1E293B; --refuse-fg: #CBD5E1; --refuse-bd: #334155;
-    --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 4px 14px rgb(0 0 0 / 30%);
+    --bg: #0C1414; --surface: #121D1C; --surface-2: #182625;
+    --ink: #E6EFEE; --ink-2: #C4D2D0; --muted: #93A5A3;
+    --line: #22302F; --line-strong: #344745;
+    --primary: #2DD4BF; --primary-hover: #5EEAD4; --on-primary: #062320; --primary-soft: #123532;
+    --focus: #5EEAD4; --link: #5EEAD4;
+    --ok: #6EE7B7;   --ok-soft: #0F2B22;   --ok-line: #1F5A43;
+    --bad: #FCA5A5;  --bad-soft: #351616;  --bad-line: #7F2525;
+    --warn: #FCD34D; --warn-soft: #33260C; --warn-line: #7A5512;
+    --refuse: #CBD5E1; --refuse-soft: #1C2633; --refuse-line: #334155;
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 40%);
+    --shadow-lg: 0 10px 28px rgb(0 0 0 / 45%);
   }
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #0B1220; --surface: #111A2C; --surface-2: #17233A;
-  --ink: #E5ECF6; --ink-2: #C3CEDD; --muted: #94A3B8;
-  --line: #223047; --line-strong: #31425E;
-  --brand: #93B4E0; --brand-hover: #B5CDEE; --brand-ink: #0B1220;
-  --focus: #60A5FA; --link: #93C5FD;
-  --ok-bg: #0F2E22; --ok-fg: #86EFAC; --ok-bd: #1F6B45; --ok-dot: #34D399;
-  --bad-bg: #3A1418; --bad-fg: #FCA5A5; --bad-bd: #7F1D1D; --bad-dot: #F87171;
-  --warn-bg: #3A2A0B; --warn-fg: #FCD34D; --warn-bd: #92400E; --warn-dot: #FBBF24;
-  --info-bg: #0F2140; --info-fg: #BFDBFE; --info-bd: #1E40AF;
-  --fix-bg: #3A2210; --fix-fg: #FDBA74; --fix-bd: #9A3412;
-  --refuse-bg: #1E293B; --refuse-fg: #CBD5E1; --refuse-bd: #334155;
-  --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 4px 14px rgb(0 0 0 / 30%);
+  --bg: #0C1414; --surface: #121D1C; --surface-2: #182625;
+  --ink: #E6EFEE; --ink-2: #C4D2D0; --muted: #93A5A3;
+  --line: #22302F; --line-strong: #344745;
+  --primary: #2DD4BF; --primary-hover: #5EEAD4; --on-primary: #062320; --primary-soft: #123532;
+  --focus: #5EEAD4; --link: #5EEAD4;
+  --ok: #6EE7B7;   --ok-soft: #0F2B22;   --ok-line: #1F5A43;
+  --bad: #FCA5A5;  --bad-soft: #351616;  --bad-line: #7F2525;
+  --warn: #FCD34D; --warn-soft: #33260C; --warn-line: #7A5512;
+  --refuse: #CBD5E1; --refuse-soft: #1C2633; --refuse-line: #334155;
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 40%);
+  --shadow-lg: 0 10px 28px rgb(0 0 0 / 45%);
 }
