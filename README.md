@@ -1,151 +1,108 @@
-> Đây là khung repo nộp bài. Điền mọi chỗ `____`, giữ nguyên tên các mục. **Mục 0 xoá đi sau khi tạo repo xong.**
-> Giờ, mốc, luật, rubric: xem `README.md`, `02-guide.md`, `03-rubric.md` trong repo đề (bộ đề BTC phát).
+# ComAoGaoTien — ScriptGuard: Tạo slide thuyết trình có giọng đọc & quiz trắc nghiệm bám nguồn (Track A · A3)
 
-# [Tên nhóm] — [Tên lát cắt]
+**Thành viên, lớp, track:** xem [TEAMS.md](TEAMS.md) (`L3B` · `Track A` · 4 thành viên).
 
-**Thành viên, lớp, track:** xem [TEAMS.md](TEAMS.md). **Điền TEAMS.md đúng format**: khi chấm và đánh giá, BTC quét file này để ghép điểm cho từng người.
-
-*Lát cắt = phần nhỏ nhất làm xong được trong hackathon: một người dùng · một việc · một quyết định AI · một kết quả.*
+*Lát cắt:* Giảng viên phụ trách bài pre-class chọn **một buổi học + một chủ đề** (hoặc tải tài liệu PDF / DOCX / PPTX / TXT / MD của buổi lên) → hệ thống trích chữ và ảnh minh hoạ, cắt thành các đoạn nguồn có mã `segment_id` → AI sinh **(a) bộ slide bài giảng kèm lời thuyết trình tự nhiên** và **(b) bộ câu hỏi trắc nghiệm 4 phương án A–D**, tự kiểm đối chiếu từng ý / từng đáp án với đoạn nguồn (`KHOP_NGUON` / `SAI_NGUON` / `THIEU_NGUON`) → xuất **slide HTML 16:9 + PowerPoint (`.pptx`) + giọng đọc tiếng Việt (`edge-tts`)** và **2 file PDF quiz** (bản đề + bản đáp án kèm mã nguồn), đồng thời hỗ trợ luồng **2 cổng duyệt của giảng viên** trước khi chốt bản nháp `cho_duyet` (hệ thống **không** tự xuất bản).
 
 ---
-
-## 0. Tạo repo nhóm từ khung này *(guide bước 1.0 — xoá mục này khi xong)*
-
-**Hai luật:** repo **mới, công khai (Public)** · tên `K5-Day15-<lớp>-<tên nhóm>`, vd `K5-Day15-L3A-StudyPulse` (tên nhóm viết liền, không dấu). Chép **nội dung bên trong** `starter-repo/` — `README.md`, `run.py` phải nằm ngay ở trang đầu repo.
-
-**(a) Không cần terminal — làm trên web GitHub**
-1. **New repository** → tên theo mẫu → **Public** → không tick thêm gì → tạo.
-2. Trên máy mở thư mục `starter-repo/`, **bật hiện file ẩn** (Mac Finder: `Cmd + Shift + .` · Windows: View → Show → Hidden items) để thấy `.gitignore`, `.env.example`.
-3. Trên repo vừa tạo: **Add file → Upload files** → **kéo thả** tất cả file và thư mục bên trong `starter-repo/` → **Commit changes**. Kéo thả mới giữ được thư mục con; lỗi vì nhiều file quá thì tải từng thư mục.
-4. Kiểm: có `.gitignore` chưa (hay thiếu nhất). Thiếu thì **Add file → Create new file**, tên `.gitignore`, dán nội dung từ máy.
-5. Từ giờ sửa file ngay trên web (biểu tượng bút chì → Commit). Phần code vẫn cần **một** người chạy được trên máy: trước mỗi lượt chạy tải **Code → Download ZIP** về thư mục mới (mang `.env` sang), chạy xong chỉ upload file kết quả và file vừa sửa; trong lúc đang chạy không ai sửa `eval/benchmark.csv` trên web.
-
-**(b) Dùng git**
-```bash
-git clone https://github.com/<tai-khoan>/K5-Day15-L3A-TenNhom.git
-cd K5-Day15-L3A-TenNhom
-cp -R ../duong-dan-toi/starter-repo/. .      # Windows PowerShell: Copy-Item -Recurse -Force ..\duong-dan-toi\starter-repo\* .
-git status                                   # không được có .env, data-btc/
-git add -A && git commit -m "Khung repo từ starter-repo" && git push
-```
-
-**Xong khi:** mở link repo bằng **cửa sổ ẩn danh** thấy được file (link nộp CP1) · đã mời thành viên (Settings → Collaborators) · đã điền `TEAMS.md` và `python run.py check` không báo gì ở phần "Kiểm TEAMS.md".
-
----
-
-## Nhóm làm gì, khung làm gì
-
-| Nhóm quyết định và viết | Khung làm sẵn (không cần sửa) |
-|---|---|
-| Người dùng, pain, bằng chứng, impact (`evidence/`, `spec.md` §1–§2) | — |
-| Hình dạng giải pháp, công cụ, prompt, luồng (`spec.md` §4, `codebase/agent.py`, `tools.py`, `ai.py`) | Ghi mọi lần gọi model / công cụ vào trace, cộng token (`codebase/tracing.py`) |
-| Bộ câu thử, metric, chuẩn "đạt" (`eval/benchmark.csv`, `eval/metric_spec.yaml`, `spec.md` §7) | Kiểm đủ cột, đủ câu `kho` / `tu_choi`, đủ ≥1/3 câu từ người dùng / data thật (`run.py check`) |
-| Chấm cột `pass` theo metric spec | Chạy cả bộ một lệnh, có run ID, model, token từng câu (`run.py eval`) · tính % đạt (`run.py score`) |
-| Persona, số người dùng thật, giá model (`cost/personas.yaml`) | Sinh ~50 phiên, chạy thật qua bản chạy thử, tính chi phí / phiên, / task thành công, / tháng 3 kịch bản (`run.py simulate`) |
-
-*Ví dụ track A (ví dụ cỡ, không phải lời giải):* nhóm viết công cụ `search_lesson` tra bài pre-class đã đánh mã đoạn, luồng "tra đoạn → model trả lời kèm mã đoạn, không có thì nói không có", metric "mọi khẳng định có mã đoạn đúng", persona "ôn dồn trước kiểm tra". Khung chạy 25 câu thử ra `run-1.csv`, nhóm chấm `pass`, `score` in % đạt; `simulate` chạy 50 phiên ra chi phí / task thành công cho hai model.
 
 ## Chạy trong 3 phút
 
-Bộ khung cần **Python 3.10 trở lên** (Python 3.9 có sẵn trên macOS vẫn chạy được, chỉ in một dòng nhắc). **Không cần `pip install`.**
+### 1. Chạy dòng lệnh (CLI) & bộ đánh giá — chỉ cần Python 3.10+ (thư viện chuẩn)
 
-**Bước 1 — Mở cửa sổ lệnh ngay trong thư mục repo**
+Bộ khung chấm điểm (`run.py`, `codebase/agent.py`, `codebase/ai.py`, `eval/run_eval.py`, `cost/simulate.py`) **chỉ dùng thư viện chuẩn của Python 3.10+**, không cần `pip install`.
 
-| Windows (PowerShell) | macOS |
-|---|---|
-| Mở thư mục repo bằng File Explorer → bấm vào thanh địa chỉ → gõ `powershell` → Enter | Mở **Terminal** (Cmd + Space, gõ "Terminal") → gõ `cd ` (có dấu cách) → kéo thả thư mục repo vào → Enter |
+```bash
+# 1. Tạo file .env và điền MODEL_PROVIDER=anthropic, API_KEY=..., API_BASE_URL=...
+cp .env.example .env
 
-Gõ `dir` (Windows) hoặc `ls` (macOS / Linux): thấy `run.py` và `README.md` là đang đứng đúng chỗ.
+# 2. Kiểm tra bộ câu thử, metric_spec và TEAMS.md
+python run.py check
 
-**Bước 2 — Kiểm Python và chạy thử**
+# 3. Chạy bản chạy thử ở dòng lệnh (chưa điền .env sẽ chạy chế độ giả "fake")
+python run.py
 
-| Việc | Windows (PowerShell) | macOS / Linux |
-|---|---|---|
-| Kiểm Python | `python --version` (không được thì `py --version`) | `python3 --version` |
-| Chạy bản chạy thử (chế độ giả, chưa gọi model) | `python run.py` | `python3 run.py` |
-| Kiểm bộ câu thử | `python run.py check` | `python3 run.py check` |
-| Tạo file `.env` để nối model | `copy .env.example .env` | `cp .env.example .env` |
+# 4. Thử nối model thật với 3 câu đầu
+python run.py eval --try
+```
 
-- Windows: gõ `python` mà mở Microsoft Store hoặc báo không có lệnh → dùng `py`. Chưa có Python: cài từ python.org, **tick "Add python.exe to PATH"**, mở lại PowerShell.
-- macOS: báo `command not found: python` là bình thường → dùng `python3`.
-- `python run.py` in ra "[câu trả lời giả — chưa nối model] …" là khung chạy đúng. Nối model thật: [docs/connect-model.md](docs/connect-model.md).
+*(Trên macOS/Linux có thể thay `python` bằng `python3`; trên Windows dùng `python` hoặc `py`.)*
 
-Trong README này lệnh viết là `python …`; máy nhóm cần `python3` hay `py` thì gõ thay.
+### 2. Chạy Giao diện Web & xuất Slide HTML / PPTX / Giọng đọc / Quiz PDF
+
+Giao diện web và lớp xuất file dùng thêm `fastapi`, `uvicorn`, `edge-tts`, `fpdf2`, `pypdf`, `pillow`, `python-pptx`:
+
+```bash
+python -m pip install -r requirements.txt
+python -m uvicorn api:app --app-dir codebase --port 8000
+```
+
+Mở trình duyệt tại:
+- **`http://localhost:8000/ui/`** — **Giao diện chính (3 bước nhanh):** Tải tài liệu (PDF / DOCX / PPTX / TXT / MD, tự trích chữ & ảnh) → Tạo slide 16:9 (4 bảng màu, chèn ảnh từ tài liệu, thu giọng thuyết trình Hoài My / Nam Minh, tải `.pptx` / `.html` / `.zip`) → Tạo quiz trắc nghiệm & tải 2 file PDF đề thi + đáp án có mã nguồn.
+- **`http://localhost:8000/ui/legacy/`** — **Giao diện kiểm duyệt 2 cổng ScriptGuard:** Rà soát kịch bản câu-theo-câu, duyệt từng slide / từng câu quiz qua Cổng 1 → Cổng 2 và xem chi tiết trace / chi phí trong panel `Agent verify`.
+- API docs tự động tại `http://localhost:8000/docs`, hợp đồng chi tiết ở [docs/api.md](docs/api.md).
+
+---
 
 ## Lệnh
 
 | Lệnh | Làm gì |
 |---|---|
-| `python run.py` | Chạy bản chạy thử (gõ đầu vào, nhận kết quả, kèm số lần gọi model / token) |
-| `python run.py check` | Kiểm `eval/benchmark.csv` (6 cột, số câu, `kho` / `tu_choi`, mã `source`, ô trống, dòng mẫu) `eval/metric_spec.yaml` (≥3 metric điền đủ) và `TEAMS.md` (đúng format để BTC quét). Chỉ cảnh báo, không sửa file |
-| `python run.py eval --try` | **Thử nối model:** chạy 3 câu đầu (`--try 5` = 5 câu) → `eval/run-try.csv`. Thấy "Nối model được" là xong. Không tính là một lượt |
-| `python run.py eval` | Chạy cả bộ qua `codebase/agent.py` → `eval/run-1.csv` (lần sau `run-2.csv`…) + `traces/run-1.jsonl`. Mỗi dòng có run ID, model, số lần gọi model / công cụ, token. Model còn giả → chỉ ghi `run-mock.csv`; mọi câu lỗi → `run-error.csv`; Ctrl+C → `run-stopped.csv` — đều **không** được đánh số |
-| `python run.py eval --fake` | Thử riêng bộ chạy, không gọi agent → `eval/run-fake.csv` |
-| `python run.py score eval/run-1.csv` | Sau khi điền cột `pass` (1 / 0): in % đạt tổng và theo `type`. Còn ô trống → "CHƯA CHẤM XONG", không in % |
-| `python run.py simulate --try` | Thử mô phỏng chi phí 10 phiên (làm trước CP3) → `cost/simulate-try.csv` |
-| `python run.py simulate` | Mô phỏng chi phí khi dùng thật theo `cost/personas.yaml` (≥50 phiên) → `cost/simulate-N.csv` + `cost/simulate-N-summary.md` |
-| `python run.py simulate --rate-from eval/run-2.csv` | Như trên, lấy tỉ lệ đạt từ đúng lượt chỉ định. Không ghi thì khung lấy lượt `run-N` mới nhất đã chấm, cùng model, và ghi rõ đã lấy lượt nào trong bản tóm tắt |
+| `python run.py` | Chạy bản chạy thử CLI (gõ đầu vào có tag `[TAO_QUIZ]`, `[TAO_SLIDE]`, `[DUYET_KICH_BAN]`, `[DUYET_QUIZ]`, `[DUYET_CUOI]`, nhận kết quả kèm số lần gọi model / token) |
+| `python run.py check` | Kiểm `eval/benchmark.csv` (25 câu: `thuong` 8 · `kho` 14 · `tu_choi` 3 · `nguoi_dung` 10/25), `eval/metric_spec.yaml` (5 metric) và `TEAMS.md` (4 thành viên) |
+| `python run.py eval --try` | Chạy thử 3 câu đầu → `eval/run-try.csv` (không tính là lượt chính thức) |
+| `python run.py eval` | Chạy trọn bộ 25 câu qua `codebase/agent.py` → `eval/run-N.csv` + `traces/run-N.jsonl` |
+| `python run.py score eval/run-4.csv` | In % đạt tổng và theo từng `type` (`run-1`: 20/25 = 80% → `run-4` & `run-6`: 25/25 = 100%) |
+| `python eval/stability.py --runs 3` | Đo độ ổn định 25 câu × 3 lần chạy độc lập → `eval/stability-1.csv` / [eval/stability-1.md](eval/stability-1.md) (nhãn ổn định 24/25 câu) |
+| `python run.py simulate --try` | Thử mô phỏng chi phí 10 phiên → `cost/simulate-try.csv` |
+| `python run.py simulate --rate-from eval/run-4.csv` | Mô phỏng chi phí theo `cost/personas.yaml` → `cost/simulate-1.csv` (93/100 phiên hợp lệ, \$0,0219 / task thành công) |
+| `python -m unittest discover -s tests` | Chạy 36 unit test offline cho `ingest.py`, `exporters.py`, `deck.py`, `pptx_export.py` và `api.py` |
 
-Gói miễn phí báo hết lượt: thêm `--wait 4` sau `eval` hoặc `simulate` (nghỉ 4 giây giữa hai lượt gọi). Sửa CSV bằng Excel: *File → Save As → CSV UTF-8*; Google Sheets: *Tệp → Tải xuống → CSV*.
+---
 
-**Lượt có lỗi kỹ thuật** (cột `error` có chữ): không sửa tay file đó, chạy lại thành lượt mới và ghi vào bảng các lượt ở `eval/README.md`. Không xoá file lượt nào.
+## Cấu trúc bản chạy thử
 
-Nhóm dùng stack khác (Node, Streamlit, notebook…): sửa hàm `run_app()` trong `run.py` để `python run.py` vẫn chạy được bản chạy thử, và giữ `answer()` trong `codebase/agent.py` để `eval`, `simulate` chạy được.
+| File | Vai trò |
+|---|---|
+| `codebase/agent.py` | `answer(text)` & `create_from_doc(...)` — workflow cố định (`spec.md` §4): phân loại yêu cầu (Haiku) → tra nguồn → sinh quiz/slide (Sonnet, chia lô tự động cho tài liệu dài) → code xác minh cấu trúc & `segment_id` → kiểm nhãn (Haiku) |
+| `codebase/ai.py` | `call_model(system, user, model=None)` — chỗ duy nhất gọi model AI, lấy token thật từ trường `usage`, tự thử lại khi gặp `429`/`5xx`/`403 rate_limit` hoặc chạm `max_tokens` |
+| `codebase/tools.py` | Công cụ `@tool`: `search_sources` (từ khoá + IDF bỏ dấu + ưu tiên tiêu đề), `get_segment`, `submit_for_review` (luôn trả `status="cho_duyet"`) |
+| `codebase/ingest.py` | Nạp tài liệu thật (PDF / DOCX / PPTX / TXT / MD): trích chữ + trích ảnh minh hoạ gắn theo đoạn `D10-S01…` (lưu cục bộ ở `data/uploads/`, tự tách biệt khi chạy `eval`) |
+| `codebase/deck.py` & `pptx_export.py` | Dựng bộ slide HTML 16:9 tự chứa (4 bảng màu, chèn ảnh trích từ tài liệu, phụ đề đồng bộ giọng đọc) và xuất file PowerPoint `.pptx` |
+| `codebase/exporters.py` | Xuất quiz ra 2 file PDF Unicode (đề thi + đáp án kèm nguồn), điều phối dựng slide và tổng hợp giọng đọc tiếng Việt bằng `edge-tts` |
+| `codebase/api.py`, `ui/`, `ui/legacy/` | FastAPI server (tác vụ nền có bước tiến trình thật, nghe thử/thu lại giọng đọc, tải gói `.zip`), giao diện chính 3 bước (`ui/`) và giao diện kiểm duyệt 2 cổng (`ui/legacy/`) |
 
-## Bản chạy thử — viết ở đâu
-
-| File | Viết gì | Bước guide |
-|---|---|---|
-| `codebase/agent.py` | `answer(text)` — luồng chính, đúng hình dạng ở `spec.md` §4. Khung có sẵn một workflow 2 bước *ví dụ* | 3.2 |
-| `codebase/tools.py` | Công cụ của bài toán, mỗi công cụ một hàm có `@tool` | 2.2, 3.2 |
-| `codebase/ai.py` | `call_model(system, user)` — chỗ duy nhất gọi model. Chưa điền `.env` thì chạy **chế độ giả** | 3.3 |
-
-- **Trước CP2:** để chế độ giả, công cụ trả dữ liệu giả — `python run.py` đi hết luồng là đủ.
-- **Trước CP3:** nối model thật theo [docs/connect-model.md](docs/connect-model.md), `eval --try` thấy token > 0 rồi mới `eval`.
-- Bộ chạy gửi **nguyên ô `input`** của câu thử vào `answer(text)`. Dữ liệu nền (bài học, thông báo, lịch…) để trong `data/`, đọc qua công cụ.
+---
 
 ## Phần nào thật, phần nào giả
 
 | Thành phần | Thật / Giả | Ghi chú |
 |---|---|---|
-| Lời gọi AI ở quyết định trung tâm | **Thật** (bắt buộc từ CP3) | Model: ____ |
-|  |  |  |
+| Lời gọi AI ở quyết định trung tâm (`ai.py`) | **Thật** | Model: `claude-sonnet-5-5` (sinh quiz / slide) + `claude-haiku-5-5` (phân loại yêu cầu & gắn nhãn kiểm nguồn); token đọc trực tiếp từ `usage` của API |
+| Kiểm cấu trúc & xác minh mã đoạn (`agent.py`, `tools.py`) | **Thật** | Code kiểm đủ 4 phương án A–D, đúng 1 đáp án, `segment_id` tồn tại thật trong kho và lọc bỏ khẳng định lạc đề |
+| Xuất Slide HTML, PowerPoint, PDF Quiz & Giọng đọc (`deck.py`, `pptx_export.py`, `exporters.py`) | **Thật** | Xuất `.html` 16:9, `.pptx` (`python-pptx`), gói `.zip`, 2 file `.pdf` tiếng Việt (`fpdf2`) và `.mp3` giọng `vi-VN-HoaiMyNeural` / `vi-VN-NamMinhNeural` (`edge-tts`) |
+| Nạp tài liệu & trích ảnh thật (`ingest.py`) | **Thật** | Đọc PDF / DOCX / PPTX / TXT / MD, trích cả văn bản lẫn hình ảnh minh hoạ trong tài liệu và gắn về đúng đoạn nguồn |
+| Kho tài liệu gốc dùng chấm `eval` (`data/sources/segments.json`) | **Giả lập (`synthetic`)** | 14 đoạn do nhóm viết tóm tắt từ 3 buổi học (1, 4, 7), có cài 1 đoạn bản cũ (`D01-S06`, 32K vs 128K) để đo phát hiện nguồn lỗi thời |
+| Truy xuất đoạn nguồn (`search_sources`) | **Đơn giản hoá** | So khớp từ khoá + trọng số IDF bỏ dấu tiếng Việt (chưa dùng vector embedding; PDF dạng ảnh quét chưa có OCR) |
+| Xuất bản lên LMS (`submit_for_review`) | **Giả lập lưu nháp** | Chỉ lưu bản nháp cục bộ ở `drafts/` (trạng thái `cho_duyet`), **không** nối LMS pre-class thật và không tự động xuất bản cho học viên |
+
+---
 
 ## Dùng AI vào việc gì
 
-2–3 dòng (bắt buộc): nhóm dùng công cụ AI nào để làm gì, người kiểm lại phần nào. Chi tiết: [docs/ai-usage.md](docs/ai-usage.md). Coding agent đọc [AGENTS.md](AGENTS.md).
+Nhóm dùng **Claude Code** để viết lõi workflow (`codebase/ai.py`, `tools.py`, `agent.py`, `api.py`, `deck.py`, `pptx_export.py`), giao diện `ui/` và tổng hợp bảng số liệu từ log chạy thật; dùng **Codex** để viết mô-đun xuất PDF/TTS (`exporters.py`), nạp tài liệu (`ingest.py`) cùng bộ unit test; dùng **Antigravity** để rà soát đặc tả, hoàn thiện giao diện kiểm duyệt (`ui/legacy/`) và đồng bộ tài liệu dự án. Toàn bộ câu hỏi khảo sát gửi người thật (n = 20 hợp lệ / 23 phiếu), quyết định thiết kế, chuẩn "đạt" (`spec.md` §7) và kiểm duyệt thay đổi trước khi commit đều do các thành viên nhóm thực hiện. Chi tiết xem tại [docs/ai-usage.md](docs/ai-usage.md).
 
-____
-
-## File mẫu — điền ở bước nào
-
-| File | Điền ở bước guide | Mốc |
-|---|---|---|
-| `TEAMS.md` | 1.0 | CP1 · **đúng format**, BTC quét khi chấm |
-| `canvas.md` | 1.4 | CP1, cập nhật CP2 |
-| `evidence/hypothesis.md` | 1.1 | trước khi tìm bằng chứng |
-| `evidence/data-mining.md` · `evidence/interviews/TEMPLATE.md` → `P1.md`… · `evidence/survey/TEMPLATE.md` | 1.2 | bắt đầu sau Zoom, xong CP3 |
-| `evidence/summary.md` | 1.2 | CP3 |
-| `spec.md` | §0–§2: 1.1–1.3 · §3–§5: 2.1–2.3 · §7: 2.4 · §8: 4.2 · §10: suốt | §7 chốt CP2 · §0–§7 CP3 · đủ CP4 |
-| `data/DATA_CARD.md` | 2.4 | bản đầu CP2 |
-| `eval/benchmark.csv` · `eval/metric_spec.yaml` | 2.4 | ≥10 câu + metric chốt CP2 · 20–30 câu CP3 |
-| `codebase/` | 3.2, 3.3 | khung CP2 · AI thật CP3 |
-| `eval/report.md` · `eval/README.md` | 4.1 (README mục 1–4 từ 2.4) | CP4 |
-| `cost/personas.yaml` · `cost/cost-estimate.md` | 4.2 | thử 10 phiên CP3 · đủ CP4 |
-| `validation/log.md` *(bonus)* | 4.3 | CP4 |
-| `slides/outline.md` → `demo-slides.pdf` | 5.1 | CP4 |
-| `reflection/TEMPLATE.md` → `reflection/<ten>.md` | 5.3 | 23:59 Thứ Bảy 28/11 |
-| `AGENTS.md` · `docs/ai-usage.md` | khi dùng coding agent / AI | suốt |
+---
 
 ## Bảy hạng mục bắt buộc — nằm ở file nào
 
 | # | Hạng mục | File |
 |---|---|---|
-| 1 | Bằng chứng pain | `evidence/` (tổng hợp ở `evidence/summary.md`) |
-| 2 | Impact có số | `spec.md` §2 |
-| 3 | Thiết kế giải pháp | `spec.md` §4 |
-| 4 | Bản chạy thử làm trọn lát cắt | `codebase/` · lệnh ở mục "Lệnh" |
-| 5 | Định nghĩa "tốt" + bộ câu thử | `data/DATA_CARD.md` · `eval/` |
-| 6 | Mô phỏng chi phí khi dùng thật | `cost/` |
-| 7 | Slide + demo + video dự phòng | `demo-slides.pdf` ở thư mục gốc · link video: ____ |
-| + | *Bonus:* người dùng thử | `validation/log.md` |
+| 1 | Bằng chứng pain | `evidence/` (tổng hợp ở [evidence/summary.md](evidence/summary.md) · kiểm giả thuyết ở [evidence/hypothesis.md](evidence/hypothesis.md) · log khảo sát n = 20 hợp lệ ở [evidence/survey/results.csv](evidence/survey/results.csv)) |
+| 2 | Impact có số | [spec.md](spec.md) §2 |
+| 3 | Thiết kế giải pháp | [spec.md](spec.md) §4 · [docs/implementation.md](docs/implementation.md) · [docs/api.md](docs/api.md) |
+| 4 | Bản chạy thử làm trọn lát cắt | `codebase/` · `ui/` · `ui/legacy/` · lệnh chạy ở mục [Chạy trong 3 phút](#chạy-trong-3-phút) |
+| 5 | Định nghĩa "tốt" + bộ câu thử + báo cáo đánh giá | [data/DATA_CARD.md](data/DATA_CARD.md) · [eval/benchmark.csv](eval/benchmark.csv) · [eval/metric_spec.yaml](eval/metric_spec.yaml) · [eval/README.md](eval/README.md) · [eval/report.md](eval/report.md) · [eval/stability-1.md](eval/stability-1.md) |
+| 6 | Mô phỏng chi phí khi dùng thật | [cost/personas.yaml](cost/personas.yaml) · [cost/simulate-1.csv](cost/simulate-1.csv) · [cost/cost-estimate.md](cost/cost-estimate.md) |
+| 7 | Slide + demo + video dự phòng | [demo-slides.pdf](demo-slides.pdf) ở thư mục gốc (nguồn: [slides/demo-slides.html](slides/demo-slides.html)) |
+| + | *Bonus:* người dùng thử | [validation/log.md](validation/log.md) |

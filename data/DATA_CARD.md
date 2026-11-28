@@ -14,7 +14,7 @@
 | Nhãn | `synthetic` |
 | Giới hạn | Rất nhỏ so với tài liệu thật (một bài 20–80 trang theo khảo sát). Các con số lab (chunk 500, top-k 5, context 128K) là **giá trị nhóm đặt cho kho thử**, không trích từ tài liệu khoá. `D01-S06` cố ý là bản cũ (03/2024) mâu thuẫn `D01-S04` để thử ca "nguồn lỗi thời". Chỉ tiếng Việt, chỉ chủ đề LLM/RAG; không có buổi 9 (dùng cho câu thử B21) |
 
-**Cách sinh:** viết tay, không dùng seed. Người kiểm: __ (điền tên), đã kiểm tay __/14 đoạn đúng kiến thức.
+**Cách sinh:** nhóm tự tóm tắt và biên tập thủ công từ chủ đề buổi 1, 4, 7 (không dùng script sinh ngẫu nhiên nên không có seed). Người kiểm: **Trịnh Gia Huy, Phạm Quốc Huy**, đã kiểm tay **14/14** đoạn đúng kiến thức nền LLM / Prompting / RAG.
 
 ## Dataset 2 · Bộ câu thử (`eval/benchmark.csv`)
 

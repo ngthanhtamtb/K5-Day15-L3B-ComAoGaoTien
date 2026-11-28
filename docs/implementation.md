@@ -1,13 +1,12 @@
 # Cách triển khai dự án A3 — Tạo quiz và slide có kiểm duyệt nguồn
 
-> Tài liệu nội bộ để cả nhóm nắm hệ thống, thuyết trình và trả lời câu hỏi. Cập nhật tình trạng ở mục 9 sau mỗi chặng.
-> Trạng thái lúc viết: **kế hoạch đã chốt, chưa có code**. Mọi mục "sẽ làm" phải đổi thành "đã làm" khi xong.
+> Tài liệu nội bộ để cả nhóm nắm hệ thống, thuyết trình và trả lời câu hỏi. Tình trạng thực tế đã hoàn thành được cập nhật ở mục 9.
 
 ## 1. Một câu mô tả
 
 Giảng viên chọn **buổi học + chủ đề**. Hệ thống lấy đoạn tài liệu gốc của buổi, sinh **bộ câu trắc nghiệm** và **kịch bản slide có lời thuyết trình**, gắn mã đoạn nguồn cho từng câu, tự gắn nhãn đúng/sai/thiếu nguồn, rồi qua **2 cổng duyệt do giảng viên bấm** trước khi thành bản nháp `cho_duyet`. Hệ thống không bao giờ tự xuất bản.
 
-Vì sao chọn: giảng viên mất 15 phút–2 tiếng mỗi bài chỉ để đối chiếu đáp án với tài liệu gốc; đáp án sai có thể tới 700+ học viên (xem `evidence/summary.md`). Lưu ý trung thực: khảo sát mới có n = 7, dưới ngưỡng 20, nên chỉ là tham khảo.
+Vì sao chọn: giảng viên mất 15 phút–2 tiếng mỗi bài chỉ để đối chiếu đáp án với tài liệu gốc; đáp án sai có thể tới 700+ học viên (xem `evidence/summary.md` — khảo sát n = 20 phiếu hợp lệ / 23 phiếu, đạt ngưỡng 20; pain ở mức vừa với mức phiền 2,9/5 và mức lo sót lỗi 2,85/5).
 
 ## 2. Chức năng
 
@@ -35,9 +34,9 @@ Vì sao chọn: giảng viên mất 15 phút–2 tiếng mỗi bài chỉ để 
 | Retrieval | So khớp từ khóa + lọc theo buổi trên `data/sources/segments.json` (14 đoạn) | Kho nhỏ, không cần embedding; nêu rõ là phần còn giả |
 | Luồng | Workflow cố định (không agent) | Chuỗi bước cố định, chỉ có 2 quyết định AI: sinh bám nguồn và gắn nhãn |
 | PDF | `fpdf2` (cần font Unicode cho tiếng Việt) | Thư viện thuần Python, dễ cài. Nếu pip bị chặn thì chuyển HTML in ra PDF |
-| Slide | HTML tự chứa | Mở được ở mọi máy, nhúng được audio |
-| Giọng đọc | `edge-tts` (giọng vi-VN có sẵn) | Miễn phí, không cần key, chỉ dùng giọng có sẵn |
-| API web | FastAPI + uvicorn (`codebase/api.py`) | Để giao diện web của nhóm gọi vào; UI do nhóm đưa prototype sau |
+| Slide | HTML 16:9 tự chứa (`deck.py`) + PowerPoint `.pptx` (`pptx_export.py`) | Mở được trên mọi trình duyệt (4 bảng màu, phụ đề đồng bộ) và chỉnh tiếp được trên PowerPoint |
+| Giọng đọc | `edge-tts` (`vi-VN-HoaiMyNeural`, `vi-VN-NamMinhNeural`, 4 mức tốc độ) | Miễn phí, không cần key, chỉ dùng giọng có sẵn |
+| API & Giao diện web | FastAPI + uvicorn (`codebase/api.py`), JS thuần (`ui/` + `ui/legacy/`) | Phục vụ cùng origin tại `/ui/` (studio 3 bước) và `/ui/legacy/` (kiểm duyệt 2 cổng) |
 
 ## 4. Luồng xử lý
 
@@ -89,10 +88,10 @@ Sau cổng 2: export_quiz_pdf · render_slides · synthesize_voice → submit_fo
 
 | Phần | Ai làm | Ghi chú |
 |---|---|---|
-| `ai.py`, `agent.py`, `tools.py`, `api.py` | Claude Code | Lõi chấm điểm, ưu tiên cao nhất |
-| `exporters.py` (PDF, slide HTML, edge-tts) + test | Codex | File riêng, không đụng file của Claude |
-| Giao diện web | Nhóm đưa prototype; Antigravity ghép vào API khi có | **Chưa làm UI**; hợp đồng là các endpoint của `api.py` |
-| Duyệt, điền cột `pass`, slide demo, `spec.md` | Nhóm | Claude không tự commit; nhóm kiểm duyệt trước |
+| `ai.py`, `agent.py`, `tools.py`, `api.py`, `deck.py`, `pptx_export.py`, `ui/` | Claude Code (Phạm Quốc Huy, Trần Bảo Long) | Lõi chấm điểm, tác vụ nền, xuất HTML/PPTX và studio 3 bước |
+| `exporters.py`, `ingest.py` + `tests/` | Codex (Trần Bảo Long, Phạm Quốc Huy review) | Xuất PDF Unicode, TTS, trích chữ & ảnh từ PDF/DOCX/PPTX |
+| Giao diện kiểm duyệt 2 cổng (`ui/legacy/`) & tài liệu | Antigravity + Claude Code (Nguyễn Thành Tâm, Trịnh Gia Huy) | Đồng bộ 7 màn prototype, studio giọng đọc và hồ sơ đặc tả/đánh giá |
+| Khảo sát, chấm `pass`, slide demo, `spec.md` | Cả nhóm | Nhóm tự thu phiếu người thật và kiểm duyệt trước khi commit |
 
 **Có cần prototype ngay không:** không. Lõi `answer()` và eval làm trước, độc lập với giao diện. UI sau chỉ cần gọi các endpoint API, nên không phải viết lại lõi.
 
@@ -119,5 +118,5 @@ Sau cổng 2: export_quiz_pdf · render_slides · synthesize_voice → submit_fo
 - **Nguồn lỗi thời xử lý sao?** Hai đoạn mâu thuẫn thì dùng `updated_date` mới hơn và báo cả hai (ca B04, B17).
 - **Vì sao hai model?** Sinh cần chất lượng (Sonnet); gắn nhãn nhiều lần nên dùng model rẻ (Haiku). Chi phí tính riêng từng model.
 - **Kho chỉ 14 đoạn có đủ không?** Không. Đây là lát cắt chứng minh luồng; mở rộng cần nạp tài liệu thật và retrieval embedding.
-- **Pain có thật không?** Khảo sát n = 7 cho thấy pain chưa mạnh (phiền 2,1/5); đã ghi rõ trong `evidence/summary.md` và cần phỏng vấn thêm.
-- **AI sai thì ai chịu?** Giảng viên duyệt cả 2 cổng; hệ thống chỉ tạo bản nháp.
+- **Pain có thật không?** Khảo sát n = 20 hợp lệ / 23 phiếu cho thấy pain ở mức vừa (phiền 2,9/5, lo sót lỗi 2,85/5; 14/20 kiểm bằng trí nhớ, 7/20 mất ≥ 31 phút/bài); đã ghi trung thực trong `evidence/summary.md` và `evidence/hypothesis.md`.
+- **AI sai thì ai chịu?** Mọi nội dung sinh ra đều tự kiểm đối chiếu mã đoạn có thật trong kho và dừng ở bản nháp (`cho_duyet`), giảng viên là người kiểm duyệt trước khi tự xuất bản.

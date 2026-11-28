@@ -1,0 +1,10 @@
+# Reflection — Nguyễn Thành Tâm
+
+1. **Vai trò + phần mình làm (trỏ tới file / commit):**
+   Mình phụ trách vai trò **BA & CI/CD** của nhóm ComAoGaoTien: trực tiếp xây dựng tài liệu đặc tả `spec.md` từ giai đoạn khám phá sang thiết kế 2 cổng duyệt (`a375971`), thiết kế câu hỏi & thu thập khảo sát người dùng thật (`evidence/survey/results.csv`, merge PR `#1` `f5cba59`), từ bản `spec.md` dựng bản **UI prototype 7 màn hình ScriptGuard** rồi ghép vào FastAPI kèm studio giọng đọc thuyết trình slide (`f483eae` → `ui/legacy/`, `codebase/api.py`), và hoàn thiện hồ sơ nộp bài (`canvas.md`, `README.md`, `docs/ai-usage.md`).
+
+2. **AI hỗ trợ mình thế nào (việc gì, công cụ gì, chỗ nào phải sửa lại output AI):**
+   Mình dùng Antigravity và Claude để phân tích bài toán Track A3, viết đặc tả `spec.md`, rà câu hỏi khảo sát tránh dẫn dắt, sinh bản UI prototype 7 màn hình từ đặc tả và ghép thành giao diện web chạy thật với backend. Những chỗ mình phải trực tiếp sửa lại output của AI là: (1) lúc lên `spec.md`, AI mặc định quy trình có bước "ghi hình video" và ước lượng giảng viên mất nhiều giờ mỗi bài — mình đã yêu cầu bỏ hẳn bước ghi hình để chuyển sang tạo slide + giọng đọc rời từng trang và chỉnh lại mức độ pain theo đúng 20 phiếu khảo sát thật (2,9/5); (2) từ bản UI prototype tĩnh, mình yêu cầu bổ sung phần xử lý giọng thuyết trình slide (sóng âm, chọn giọng/tốc độ, sửa lời đọc từng slide), sửa lỗi lọt chữ `null` ra DOM của `replaceChildren(...)` và thay bộ đếm slide giả lập bằng tiến trình thật từ server.
+
+3. **Một câu thử trượt của nhóm và mình học được gì từ nó:**
+   Câu `B13` ở `eval/run-1.csv` (câu quiz chọn sai đáp án A thay vì B — Chain-of-thought) làm mình nhớ nhất: model kiểm thực ra đã phát hiện đáp án đúng là B trong phần lý do, nhưng vì trả mã đoạn kèm ký tự phụ nên bộ lọc code hạ nhãn từ `SAI_NGUON` xuống `THIEU_NGUON`, khiến lỗi đáp án sai suýt không được báo đỏ cho giảng viên. Bài học rút ra là khi kết hợp LLM với guardrail bằng code (xác minh `segment_id`), nếu bước chuẩn hoá đầu ra quá cứng nhắc thì chính guardrail lại che mất cảnh báo quan trọng nhất đối với người dùng; phải đọc từng dòng output thật mới phát hiện được chỗ lệch này.

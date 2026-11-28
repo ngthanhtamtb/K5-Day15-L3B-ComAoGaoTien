@@ -1,10 +1,22 @@
 # Hợp đồng API cho giao diện (`codebase/api.py`)
 
-Chạy: `python -m uvicorn api:app --app-dir codebase --port 8000`. Biến môi trường: `CORS_ORIGINS` (mặc định `*`, khi deploy đặt origin thật). Bản nháp và kịch bản chỉ nằm trong bộ nhớ (tắt server là mất). **Không có endpoint xuất bản**: trạng thái cuối luôn là `cho_duyet`, giảng viên tự xuất bản ngoài hệ thống.
+Chạy: `python -m uvicorn api:app --app-dir codebase --port 8000`. Biến môi trường: `CORS_ORIGINS` (mặc định `*`, khi deploy đặt origin thật). Bản nháp và kịch bản lưu bền cục bộ ở `drafts/_state.json`. **Không có endpoint xuất bản**: trạng thái cuối luôn là bản nháp nội bộ (`cho_duyet` / `xong` để tải về), giảng viên tự xuất bản ngoài hệ thống.
 
-Mã đoạn dạng `D01-S02` (prototype ghi `DAY01-S02`: giao diện tự đổi khi hiển thị). Mọi lệnh gọi model trả thêm `trace` (xem cuối trang).
+## 1. Luồng chính cho giao diện 3 bước (`http://localhost:8000/ui/`)
 
-## Tương ứng màn hình của prototype → endpoint
+| Bước | Việc | Endpoint |
+|---|---|---|
+| 1 · Tài liệu | Liệt kê tài liệu các buổi (kèm số ảnh, ký tự, đoạn xem trước) | `GET /api/kho` |
+| 1 · Tài liệu | Tải tài liệu `.pdf` / `.docx` / `.pptx` / `.txt` / `.md` → trích chữ + ảnh minh hoạ | `POST /api/kho/upload` |
+| 1 · Tài liệu | Phục vụ ảnh trích từ tài liệu | `GET /api/images/{name}` |
+| 2 · Tạo slide | Nghe thử giọng đọc mẫu (có bộ đệm theo giọng + tốc độ) | `GET /api/voice/preview?voice=...&rate=...` |
+| 2 · Tạo slide | Chạy tác vụ nền dựng bộ slide (chia lô tài liệu dài → gắn ảnh → thu giọng → xuất HTML/PPTX/ZIP) | `POST /api/jobs/deck` → `{job_id}` |
+| 2 · Tạo slide | Đổi lời đọc / giọng / tốc độ từng slide hoặc cả bộ rồi dựng lại HTML/PPTX/ZIP | `POST /api/drafts/{id}/voice` |
+| 3 · Tạo quiz | Chạy tác vụ nền sinh bộ quiz trắc nghiệm + xuất 2 PDF (đề thi & đáp án) | `POST /api/jobs/quiz` → `{job_id}` |
+| 2 & 3 · Tiến trình | Đọc tiến trình từng bước thật (`doc` → `viet` → `anh` → `giong` → `dung`) | `GET /api/jobs/{job_id}` |
+| 2 & 3 · Tải về | Tải `slides_pptx`, `slides_html`, `bundle_zip`, `exam_pdf`, `answer_pdf`, `audio_N` | `GET /api/drafts/{id}/files/{name}?dl=1` |
+
+## 2. Tương ứng màn hình kiểm duyệt 2 cổng (`http://localhost:8000/ui/legacy/`) → endpoint
 
 | Màn prototype | Việc | Endpoint |
 |---|---|---|

@@ -40,6 +40,6 @@ Khung chỉ dùng thư viện chuẩn của Python. Thêm thư viện thì ghi v
 
 ## Quy ước của nhóm
 
-- Ngôn ngữ trả lời người dùng: __
-- Phong cách code / đặt tên: __
-- Ai duyệt thay đổi do agent tạo trước khi commit: __
+- Ngôn ngữ trả lời người dùng: Tiếng Việt (thuật ngữ kỹ thuật LLM / RAG / token giữ tiếng Anh khi cần chính xác).
+- Phong cách code / đặt tên: Python 3.10+ chuẩn PEP 8, tách rõ lớp lõi `answer()` (chỉ thư viện chuẩn) và lớp xuất file / API web (`exporters.py`, `deck.py`, `pptx_export.py`, `api.py`).
+- Ai duyệt thay đổi do agent tạo trước khi commit: Đội trưởng Phạm Quốc Huy (lõi AI / backend) và thành viên phụ trách từng mảng trong `TEAMS.md`.
