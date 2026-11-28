@@ -442,3 +442,42 @@ def answer(text: str) -> dict:
                 "data": {"status": "thieu_nguon"}}
     return {"output": _fmt_claims(claims, injected),
             "data": {"status": "da_kiem", "mode": mode, "nhan": claims, "chen_chi_dan": injected}}
+
+
+SLIDE_VISUAL_SYSTEM = (
+    "Bạn là chuyên gia thiết kế bài giảng trực quan. Nhiệm vụ: với danh sách slide đã được giảng viên duyệt, "
+    "chọn bố cục phù hợp và vẽ MỘT sơ đồ SVG minh hoạ riêng cho từng slide.\n"
+    "Quy tắc:\n"
+    "1. KHÔNG thay đổi hay thêm kiến thức/số liệu ngoài nội dung slide đã cho.\n"
+    "2. Chọn layout phù hợp nhất trong 4 kiểu: 'split-diagram' (2 cột + sơ đồ), 'cards' (thẻ ý chính), "
+    "'timeline' (các bước nối tiếp), 'comparison' (đối chiếu/cân bằng).\n"
+    "3. Mỗi slide sinh 1 chuỗi svg hợp lệ: <svg viewBox=\"0 0 360 220\" xmlns=\"http://www.w3.org/2000/svg\">...</svg>, "
+    "dùng bảng màu chuyên nghiệp (#2563eb, #1e40af, #eff6ff, #0f172a, #10b981, #f59e0b), có nhãn tiếng Việt/Anh ngắn gọn "
+    "(≤ 4 từ mỗi hộp), mũi tên, hộp bo góc rõ ràng. Tuyệt đối KHÔNG dùng <script> hay sự kiện on*.\n"
+    "4. Chỉ trả JSON thuần: {\"slides\": [{\"index\": 1, \"layout\": \"...\", \"svg\": \"<svg ...>...</svg>\"}]}"
+)
+
+
+def design_slides_visuals(items: list[dict]) -> dict:
+    """Gọi Sonnet 5.5 thiết kế layout + sơ đồ SVG riêng cho từng slide đã duyệt."""
+    if not items:
+        return {"items": items}
+    brief = [
+        {"index": i, "tieu_de": it.get("tieu_de", ""), "y_chinh": it.get("y_chinh", [])}
+        for i, it in enumerate(items, 1)
+    ]
+    raw = _ask_json(SLIDE_VISUAL_SYSTEM, "Danh sách slide:\n" + json.dumps(brief, ensure_ascii=False), MODEL_GEN)
+    by_idx = {}
+    if isinstance(raw, dict) and isinstance(raw.get("slides"), list):
+        for entry in raw["slides"]:
+            if isinstance(entry, dict) and isinstance(entry.get("index"), int):
+                by_idx[entry["index"]] = entry
+    updated = []
+    for i, it in enumerate(items, 1):
+        copy_it = dict(it)
+        vis = by_idx.get(i)
+        if vis and isinstance(vis.get("svg"), str) and "<svg" in vis["svg"].lower():
+            layout = vis.get("layout") if vis.get("layout") in ("split-diagram", "cards", "timeline", "comparison") else "split-diagram"
+            copy_it["visual"] = {"layout": layout, "svg": vis["svg"]}
+        updated.append(copy_it)
+    return {"items": updated}

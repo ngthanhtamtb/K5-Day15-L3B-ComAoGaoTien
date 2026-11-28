@@ -12,7 +12,7 @@ const DECISION = {
 
 const S = {
   kho: null, script: null, filter: "all", sel: 0,
-  slide: null, quiz: null,                 // {draft, dec:{index:{action,item,note}}, sel, gate1:{}, gate2:{}}
+  slide: null, quiz: null, saved: null,      // saved: {drafts, scripts}
   panel: false, busy: false, err: "", info: "", seg: {},
 };
 try {
@@ -231,22 +231,39 @@ function scriptDetail(c, submitted) {
 }
 
 /* ---------- 3 · Tạo slide ---------- */
-let createOpts = { so: 6, ty_le: "16:9", mau: "AI20K chuẩn", ghi_chu: true, quiz: true };
+let createOpts = { so: 6, ty_le: "16:9", mau: "AI20K chuẩn", ghi_chu: true, quiz: true, buoi: null, chu: "", direct: false };
 function viewSlideCreate() {
-  if (!S.script) { if (S.scriptId) { ensureScript(); return h("p", {}, "Đang tải…"); } return h("div", { class: "note" }, "Chưa có kịch bản đã rà soát. ", h("a", { href: "#/import" }, "Nhập kịch bản")); }
-  const sc = S.script, kept = sc.claims.filter((c) => ["chap_nhan", "da_sua"].includes(c.quyet_dinh) && c.nhan !== "TU_CHOI").length;
-  const weak = sc.claims.filter((c) => ["chap_nhan", "da_sua"].includes(c.quyet_dinh) && ["SAI_NGUON", "THIEU_NGUON"].includes(c.nhan)).length;
-  const pending = sc.claims.filter((c) => c.quyet_dinh === "chua_quyet").length;
+  if (!S.kho) { api("GET", "/api/kho").then((k) => { S.kho = k; render(); }); return h("p", {}, "Đang tải…"); }
+  if (S.scriptId && !S.script && !createOpts.direct) { ensureScript(); return h("p", {}, "Đang tải…"); }
+  const useDirect = !S.script || createOpts.direct;
+  const sc = S.script;
+  const kept = sc ? sc.claims.filter((c) => ["chap_nhan", "da_sua"].includes(c.quyet_dinh) && c.nhan !== "TU_CHOI").length : 0;
+  const weak = sc ? sc.claims.filter((c) => ["chap_nhan", "da_sua"].includes(c.quyet_dinh) && ["SAI_NGUON", "THIEU_NGUON"].includes(c.nhan)).length : 0;
+  const pending = sc ? sc.claims.filter((c) => c.quyet_dinh === "chua_quyet").length : 0;
+  if (!createOpts.buoi && S.kho.length) createOpts.buoi = S.kho[S.kho.length - 1].buoi;
   return h("div", {},
-    h("h1", {}, "Tạo slide từ kịch bản"),
-    h("p", { class: "lead" }, "AI dựng slide từ kịch bản đã rà soát. Mỗi ý trên slide giữ liên kết tới đoạn nguồn để bước sau bạn kiểm từng slide một."),
+    h("h1", {}, useDirect ? "Tạo slide từ tài liệu gốc" : "Tạo slide từ kịch bản"),
+    h("p", { class: "lead" }, useDirect
+      ? "AI lấy đoạn tài liệu gốc trong kho (kể cả file PDF/DOCX vừa nạp) để sinh slide bám nguồn, rồi chuyển sang Cổng 1 cho bạn kiểm từng slide."
+      : "AI dựng slide từ kịch bản đã rà soát. Mỗi ý trên slide giữ liên kết tới đoạn nguồn để bước sau bạn kiểm từng slide một."),
     stepper(["Tạo slide", "Kiểm từng slide", "Gửi chờ duyệt"], 0), feedback(),
+    sc ? h("div", { class: "row", style: "margin-bottom:10px" },
+      h("button", { class: useDirect ? "" : "primary", onclick: () => { createOpts.direct = false; render(); } }, "Từ kịch bản đã rà soát"),
+      h("button", { class: useDirect ? "primary" : "", onclick: () => { createOpts.direct = true; render(); } }, "Trực tiếp từ tài liệu (không cần kịch bản)")) : null,
     h("div", { class: "grid2" },
       h("div", { class: "card" },
         h("h2", {}, "Đầu vào"),
-        h("p", {}, "Kịch bản Buổi " + sc.buoi + " · " + sc.tong_cau + " câu · giữ lại " + kept + " câu · " + (sc.stage === "ra_soat" ? "chưa gửi chờ duyệt" : "đã gửi chờ duyệt")),
-        pending ? h("div", { class: "note err" }, "Còn " + pending + " câu chưa quyết định ở bước rà soát kịch bản. ", h("a", { href: "#/script" }, "Quay lại rà soát")) : null,
-        weak ? h("div", { class: "note" }, weak + " câu bạn giữ lại có nhãn Sai / Thiếu nguồn. Slide vẫn được tạo, nhưng các ý dựa trên câu đó sẽ được kiểm lại ở bước sau.") : null,
+        useDirect ? [
+          h("label", { class: "f", for: "sb" }, "Buổi / Tài liệu gốc"),
+          h("select", { id: "sb", onchange: (e) => { createOpts.buoi = parseInt(e.target.value, 10); } },
+            S.kho.map((k) => h("option", { value: k.buoi, selected: k.buoi === createOpts.buoi }, k.ten + " (" + k.so_doan + " đoạn)"))),
+          h("label", { class: "f", for: "sc" }, "Chủ đề cần tạo slide"),
+          h("input", { type: "text", id: "sc", placeholder: "Ví dụ: Stackelberg Game, RAG, temperature...", value: createOpts.chu, oninput: (e) => { createOpts.chu = e.target.value; } }),
+        ] : [
+          h("p", {}, "Kịch bản Buổi " + sc.buoi + " · " + sc.tong_cau + " câu · giữ lại " + kept + " câu · " + (sc.stage === "ra_soat" ? "chưa gửi chờ duyệt" : "đã gửi chờ duyệt")),
+          pending ? h("div", { class: "note err" }, "Còn " + pending + " câu chưa quyết định ở bước rà soát kịch bản. ", h("a", { href: "#/script" }, "Quay lại rà soát")) : null,
+          weak ? h("div", { class: "note" }, weak + " câu bạn giữ lại có nhãn Sai / Thiếu nguồn. Slide vẫn được tạo, nhưng các ý dựa trên câu đó sẽ được kiểm lại ở bước sau.") : null,
+        ],
         h("label", { class: "f", for: "so" }, "Số slide"),
         h("select", { id: "so", onchange: (e) => { createOpts.so = parseInt(e.target.value, 10); } },
           [3, 4, 6, 8, 10].map((n) => h("option", { value: n, selected: n === createOpts.so }, n + " slide"))),
@@ -259,7 +276,10 @@ function viewSlideCreate() {
         h("div", { class: "hint" }, "Mẫu trình bày, tỉ lệ khung và ghi chú người nói được áp dụng khi dựng slide HTML."),
         h("div", { class: "row", style: "margin-top:12px" },
           busyBtn("Tạo slide", () => act(async () => {
-            const base = { buoi: sc.buoi, script_id: sc.script_id, options: createOpts };
+            if (useDirect && !createOpts.chu.trim()) throw new Error("Hãy nhập chủ đề cần tạo slide.");
+            const base = useDirect
+              ? { buoi: createOpts.buoi, chu_de: createOpts.chu.trim(), options: createOpts }
+              : { buoi: sc.buoi, script_id: sc.script_id, options: createOpts };
             const r = await api("POST", "/api/drafts", Object.assign({ kind: "slide", so_luong: createOpts.so }, base));
             if (!r.created) throw new Error(r.message || "Không tạo được slide: " + r.status);
             S.slide = freshReview(r.draft); S.slideId = r.draft.draft_id; remember("slide", S.slideId);
@@ -269,7 +289,7 @@ function viewSlideCreate() {
               else S.info = "Slide đã tạo; quiz chưa tạo được: " + (q.message || q.status);
             }
             go("#/slide");
-          }), { disabled: pending > 0 || !kept, spin: true }),
+          }), { disabled: !useDirect && (pending > 0 || !kept), spin: true }),
           h("span", { class: "hint" }, "Slide tạo ra ở trạng thái bản nháp, chưa xuất bản."))),
       h("aside", { class: "card" }, h("h2", {}, "Sau khi tạo, bạn kiểm thế nào"),
         h("ol", {}, h("li", {}, "Đi lần lượt từng slide, mỗi màn hình một slide."),
@@ -330,7 +350,7 @@ function viewReview(kind) {
   const st = S[kind], idKey = kind === "slide" ? S.slideId : S.quizId, name = kind === "slide" ? "slide" : "câu quiz";
   if (!st) {
     if (idKey) { ensureDraft(kind); return h("p", {}, "Đang tải bản nháp…"); }
-    return kind === "slide" ? h("div", { class: "note" }, "Chưa có bản nháp slide. ", h("a", { href: "#/slide-create" }, "Tạo slide từ kịch bản")) : quizStart();
+    return kind === "slide" ? h("div", { class: "note" }, "Chưa có bản nháp slide. ", h("a", { href: "#/slide-create" }, "Tạo slide")) : quizStart();
   }
   const d = st.draft;
   if (d.stage === "cho_duyet") return reviewDone(kind, st);
@@ -508,12 +528,62 @@ function agentPanel() {
   return [fab, panel];
 }
 
+/* ---------- 6 · Đã lưu (Slide, Quiz, Kịch bản) ---------- */
+function loadSaved() {
+  Promise.all([api("GET", "/api/drafts"), api("GET", "/api/scripts")])
+    .then(([drafts, scripts]) => { S.saved = { drafts, scripts }; render(); })
+    .catch((e) => { S.err = e.message || String(e); render(); });
+}
+function viewSaved() {
+  if (!S.saved) { loadSaved(); return h("p", {}, "Đang tải danh sách đã lưu…"); }
+  const { drafts, scripts } = S.saved;
+  const stageName = { cong_1: "Cổng 1 (chưa dựng)", cong_2: "Cổng 2 (đã dựng)", cho_duyet: "Đã gửi chờ duyệt", ra_soat: "Đang rà soát", da_ra_soat: "Đã rà soát" };
+  const openDraft = (d) => act(async () => {
+    const full = await api("GET", "/api/drafts/" + d.draft_id);
+    S[d.kind] = freshReview(full);
+    if (d.kind === "slide") { S.slideId = d.draft_id; remember("slide", d.draft_id); go("#/slide"); }
+    else { S.quizId = d.draft_id; remember("quiz", d.draft_id); go("#/quiz"); }
+  });
+  const openScript = (sc) => act(async () => {
+    S.script = await api("GET", "/api/scripts/" + sc.script_id);
+    S.scriptId = sc.script_id; remember("script", sc.script_id); go("#/script");
+  });
+  return h("div", {},
+    h("div", { class: "row" }, h("h1", { style: "margin:0" }, "Bản nháp & Kịch bản đã lưu"),
+      h("button", { onclick: () => { S.saved = null; render(); } }, "Làm mới")),
+    h("p", { class: "lead" }, "Dữ liệu được lưu cục bộ trên máy (drafts/_state.json), mở lại được ngay cả khi khởi động lại server."),
+    feedback(),
+    h("div", { class: "grid2" },
+      h("section", { class: "card" },
+        h("h2", {}, "Slide & Quiz đã lưu (" + drafts.length + ")"),
+        drafts.length ? drafts.map((d) => h("article", { class: "src" },
+          h("div", { class: "row" },
+            h("strong", {}, (d.kind === "slide" ? "Slide" : "Quiz") + " buổi " + d.buoi + " — " + d.chu_de),
+            h("span", { class: "badge " + (d.stage === "cho_duyet" ? "b-ok" : "b-info") }, stageName[d.stage] || d.stage)),
+          h("p", { class: "hint" }, d.draft_id + " · " + d.so_muc + " mục" + (d.created_at ? " · " + d.created_at : "")),
+          h("div", { class: "row" },
+            h("button", { class: "primary", onclick: () => openDraft(d) }, "Mở lại"),
+            d.has_html ? h("a", { href: "/api/drafts/" + d.draft_id + "/files/slides.html", target: "_blank" }, h("button", {}, "Xem Slide HTML")) : null,
+            d.has_pdf ? h("a", { href: "/api/drafts/" + d.draft_id + "/files/exam_pdf", target: "_blank" }, h("button", {}, "PDF đề")) : null,
+            d.has_pdf ? h("a", { href: "/api/drafts/" + d.draft_id + "/files/answer_pdf", target: "_blank" }, h("button", {}, "PDF đáp án")) : null)))
+          : h("p", { class: "hint" }, "Chưa có slide hoặc quiz nào được lưu.")),
+      h("section", { class: "card" },
+        h("h2", {}, "Kịch bản đã rà soát (" + scripts.length + ")"),
+        scripts.length ? scripts.map((sc) => h("article", { class: "src" },
+          h("div", { class: "row" },
+            h("strong", {}, "Kịch bản Buổi " + sc.buoi),
+            h("span", { class: "badge " + (sc.stage === "da_ra_soat" ? "b-ok" : "b-warn") }, stageName[sc.stage] || sc.stage)),
+          h("p", { class: "hint" }, sc.script_id + " · " + sc.tong_cau + " câu" + (sc.created_at ? " · " + sc.created_at : "")),
+          h("button", { onclick: () => openScript(sc) }, "Mở lại kịch bản")))
+          : h("p", { class: "hint" }, "Chưa có kịch bản nào được lưu."))));
+}
+
 /* ---------- vẽ ---------- */
 function render() {
   const r = route(), app = document.getElementById("app");
-  const views = { import: viewImport, script: viewScript, "slide-create": viewSlideCreate, slide: () => viewReview("slide"), quiz: () => viewReview("quiz") };
-  const tabOf = { import: "kb", script: "kb", "slide-create": "slide", slide: "slide", quiz: "quiz" }[r] || "kb";
-  const tabs = [["kb", "Kịch bản", S.script ? "#/script" : "#/import"], ["slide", "Slide", S.slide ? "#/slide" : "#/slide-create"], ["quiz", "Quiz", "#/quiz"]];
+  const views = { import: viewImport, script: viewScript, "slide-create": viewSlideCreate, slide: () => viewReview("slide"), quiz: () => viewReview("quiz"), saved: viewSaved };
+  const tabOf = { import: "kb", script: "kb", "slide-create": "slide", slide: "slide", quiz: "quiz", saved: "saved" }[r] || "kb";
+  const tabs = [["kb", "Kịch bản", S.script ? "#/script" : "#/import"], ["slide", "Slide", S.slide ? "#/slide" : "#/slide-create"], ["quiz", "Quiz", "#/quiz"], ["saved", "Đã lưu", "#/saved"]];
   const scroll = window.scrollY;
   app.replaceChildren(
     h("header", { class: "top" }, h("span", { class: "brand" }, "ScriptGuard"),

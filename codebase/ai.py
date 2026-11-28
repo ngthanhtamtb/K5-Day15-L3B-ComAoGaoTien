@@ -17,9 +17,12 @@ Chế độ giả (mặc định khi .env chưa có MODEL_PROVIDER, hoặc MODEL
 Nối model thật: điền .env (chép từ .env.example), rồi viết nhánh gọi API ở dưới theo docs/connect-model.md
 (có ví dụ OpenAI, Claude, model chạy trên máy, và cách nối nhà cung cấp khác). Không dán API key vào file này.
 """
+import http.client
 import json
 import os
 import re
+import shutil
+import subprocess
 import time
 import urllib.error
 import urllib.request
@@ -54,14 +57,35 @@ MAX_TOKENS = 8192
 RETRIES = 4
 
 
+def _post_via_curl(url, req_headers, data_bytes, timeout):
+    """Fallback bằng curl.exe khi urllib bị ngắt TLS/WinError 10054 bởi proxy."""
+    curl = shutil.which("curl.exe") or shutil.which("curl")
+    if not curl:
+        return None
+    cmd = [curl, "-sS", "-X", "POST", url, "--data-binary", "@-", "-w", "\n%{http_code}", "--max-time", str(timeout)]
+    for k, v in req_headers.items():
+        cmd.extend(["-H", "%s: %s" % (k, v)])
+    proc = subprocess.run(cmd, input=data_bytes, capture_output=True, timeout=timeout + 5)
+    if proc.returncode != 0:
+        raise RuntimeError("curl lỗi (%d): %s" % (proc.returncode, proc.stderr.decode("utf-8", "replace")[:200]))
+    out = proc.stdout.decode("utf-8", "replace")
+    body_text, _, code_str = out.rpartition("\n")
+    code = int(code_str.strip()) if code_str.strip().isdigit() else 0
+    return code, body_text
+
+
 def post_json(url, headers, body, timeout=120):
-    """POST JSON, trả JSON phản hồi. Chỉ dùng urllib. Thử lại khi 429/5xx hoặc lỗi mạng."""
+    """POST JSON, trả JSON phản hồi. Dùng urllib, fallback sang curl.exe nếu bị WinError 10054."""
     data_bytes = json.dumps(body).encode("utf-8")
+    req_headers = dict({
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Connection": "close",
+    }, **headers)
     last = None
     for attempt in range(RETRIES):
-        req = urllib.request.Request(
-            url, data=data_bytes, method="POST",
-            headers=dict({"Content-Type": "application/json"}, **headers))
+        req = urllib.request.Request(url, data=data_bytes, method="POST", headers=req_headers)
         try:
             with urllib.request.urlopen(req, timeout=timeout) as r:
                 data = json.loads(r.read().decode("utf-8"))
@@ -71,8 +95,6 @@ def post_json(url, headers, body, timeout=120):
         except urllib.error.HTTPError as e:
             body_text = e.read().decode("utf-8", "replace")
             last = RuntimeError("HTTP %d: %s" % (e.code, body_text[:300]))
-            # Proxy của nhóm báo giới hạn tốc độ bằng HTTP 403 rate_limit_error ("Try again in N seconds"):
-            # 7/100 phiên mô phỏng simulate-1 chết vì lỗi này. Thử lại như 429, chờ đúng số giây proxy yêu cầu.
             rate_limited = e.code == 403 and "rate_limit" in body_text
             if e.code not in (429, 500, 502, 503, 529) and not rate_limited:
                 raise last
@@ -80,8 +102,30 @@ def post_json(url, headers, body, timeout=120):
                 m = re.search(r"in\s+(\d+(?:\.\d+)?)\s+second", body_text)
                 time.sleep(min(float(m.group(1)) + 1 if m else 5, 30))
                 continue
-        except (urllib.error.URLError, TimeoutError) as e:
+        except (urllib.error.URLError, TimeoutError, ConnectionError, http.client.HTTPException, OSError) as e:
             last = RuntimeError("lỗi mạng: %s" % e)
+            # Khi urllib bị WinError 10054 / ngắt TLS, thử fallback qua curl.exe (dùng Schannel của Windows)
+            try:
+                res = _post_via_curl(url, req_headers, data_bytes, timeout)
+                if res is not None:
+                    code, body_text = res
+                    if 200 <= code < 300:
+                        data = json.loads(body_text)
+                        if SHOW_RAW:
+                            print(json.dumps(data, ensure_ascii=False, indent=2)[:3000])
+                        return data
+                    last = RuntimeError("HTTP %d: %s" % (code, body_text[:300]))
+                    rate_limited = code == 403 and "rate_limit" in body_text
+                    if code not in (429, 500, 502, 503, 529) and not rate_limited:
+                        raise last
+                    if rate_limited:
+                        m = re.search(r"in\s+(\d+(?:\.\d+)?)\s+second", body_text)
+                        time.sleep(min(float(m.group(1)) + 1 if m else 5, 30))
+                        continue
+            except RuntimeError as ce:
+                if "HTTP " in str(ce):
+                    raise
+                last = ce
         time.sleep(2 * (attempt + 1))
     raise last
 

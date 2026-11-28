@@ -14,6 +14,7 @@ Vòng đời một bản nháp (KHÔNG có endpoint xuất bản / gửi học v
 """
 import base64
 import datetime
+import json
 import os
 import re
 import sys
@@ -45,13 +46,38 @@ _TRACE_LOCK = threading.Lock()    # tracing.begin/end dùng một biến toàn c
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DRAFT_DIR = os.path.join(ROOT, "drafts")
+STATE_FILE = os.path.join(DRAFT_DIR, "_state.json")
 
 app = FastAPI(title="A3 — quiz và slide có kiểm duyệt nguồn")
 app.add_middleware(CORSMiddleware,
                    allow_origins=[o.strip() for o in os.environ.get("CORS_ORIGINS", "*").split(",")],
                    allow_methods=["*"], allow_headers=["*"])
 
-DRAFTS = {}   # draft_id -> dict. Chỉ trong bộ nhớ. status luôn là "cho_duyet" — không bao giờ "đã xuất bản".
+DRAFTS = {}   # draft_id -> dict. Lưu bền ra drafts/_state.json; status luôn là "cho_duyet" — không bao giờ "đã xuất bản".
+_STATE_LOCK = threading.Lock()
+
+
+def _save_state():
+    with _STATE_LOCK:
+        os.makedirs(DRAFT_DIR, exist_ok=True)
+        tmp = STATE_FILE + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump({"drafts": DRAFTS, "scripts": SCRIPTS}, f, ensure_ascii=False)
+        os.replace(tmp, STATE_FILE)
+
+
+def _load_state():
+    if not os.path.isfile(STATE_FILE):
+        return
+    try:
+        with open(STATE_FILE, encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data.get("drafts"), dict):
+            DRAFTS.update(data["drafts"])
+        if isinstance(data.get("scripts"), dict):
+            SCRIPTS.update(data["scripts"])
+    except Exception:
+        pass
 
 
 class CreateBody(BaseModel):
@@ -158,8 +184,24 @@ def create_draft(body: CreateBody):
         "script_id": body.script_id, "options": body.options or {},
         "items": data["items"], "nhan": data["nhan"], "stage": "cong_1", "status": "cho_duyet",
         "files": {}, "message": res["output"], "traces": [trace],
+        "created_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
     }
+    _save_state()
     return {"created": True, "draft": _public(DRAFTS[draft_id])}
+
+
+@app.get("/api/drafts")
+def list_drafts():
+    items = []
+    for d in reversed(list(DRAFTS.values())):
+        items.append({
+            "draft_id": d["draft_id"], "kind": d["kind"], "buoi": d["buoi"], "chu_de": d["chu_de"],
+            "stage": d["stage"], "status": d["status"], "so_muc": len(d.get("items") or []),
+            "has_html": "slides_html" in (d.get("files") or {}),
+            "has_pdf": "exam_pdf" in (d.get("files") or {}),
+            "created_at": d.get("created_at", ""),
+        })
+    return items
 
 
 @app.get("/api/drafts/{draft_id}")
@@ -190,6 +232,7 @@ def gate1(draft_id: str, body: DecisionsBody):
     d["rejected"] = sorted(rejected)
     d["notes"] = {dec.index: dec.note for dec in body.decisions if dec.note}   # ghi chú "Cần sửa" của giảng viên
     d["gate1_checks"] = checks
+    _save_state()
     return {"draft": _public(d), "kiem_lai_muc_sua": checks}
 
 
@@ -205,6 +248,13 @@ def build(draft_id: str):
         if d["kind"] == "quiz":
             d["files"] = exporters.export_quiz_pdf(d["items"], out, "Quiz buổi %d — %s" % (d["buoi"], d["chu_de"]))
         else:
+            try:
+                vis_res, vis_trace = _traced("thiết kế bố cục & sơ đồ slide", agent.design_slides_visuals, d["items"])
+                if isinstance(vis_res, dict) and vis_res.get("items"):
+                    d["items"] = vis_res["items"]
+                d["traces"].append(vis_trace)
+            except Exception:
+                pass    # lỗi mạng khi vẽ visual: fallback về sơ đồ SVG mặc định, vẫn dựng slide
             audio, errors = {}, {}
             for i, it in enumerate(d["items"], 1):
                 try:
@@ -217,6 +267,7 @@ def build(draft_id: str):
     except RuntimeError as exc:
         raise HTTPException(500, str(exc))
     d["stage"] = "cong_2"
+    _save_state()
     return _public(d)
 
 
@@ -246,6 +297,7 @@ def gate2(draft_id: str, body: DecisionsBody):
         d["files"]["slides_html"] = exporters.render_slides(items, out, title, audio, d["options"])
     else:
         d["files"] = exporters.export_quiz_pdf(items, out, title)
+    _save_state()
     return {"draft": _public(d), "kiem_lai_muc_sua": checks}
 
 
@@ -256,6 +308,7 @@ def submit(draft_id: str):
         raise HTTPException(409, "phải qua cổng 2 trước khi nộp (stage=%s)" % d["stage"])
     res = tools.submit_for_review({"kind": d["kind"], "items": d["items"], "files": d["files"], "nhan": d["nhan"]})
     d["stage"], d["status"], d["review_id"] = "cho_duyet", res["status"], res["draft_id"]
+    _save_state()
     return _public(d)
 
 
@@ -404,8 +457,21 @@ def create_script(body: ScriptBody):
         "script_id": script_id, "buoi": body.buoi, "noi_dung": body.noi_dung, "stage": "ra_soat", "status": "nhap",
         "chen_chi_dan": bool(injected_at) or data.get("chen_chi_dan", False),
         "claims": [_decorate(c, i) for i, c in enumerate(claims, 1)], "traces": [trace], "message": res["output"],
+        "created_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
     }
+    _save_state()
     return {"created": True, "script": _script_public(SCRIPTS[script_id])}
+
+
+@app.get("/api/scripts")
+def list_scripts():
+    out = []
+    for sc in reversed(list(SCRIPTS.values())):
+        out.append({
+            "script_id": sc["script_id"], "buoi": sc["buoi"], "stage": sc["stage"], "status": sc["status"],
+            "tong_cau": len(sc.get("claims") or []), "created_at": sc.get("created_at", ""),
+        })
+    return out
 
 
 @app.get("/api/scripts/{script_id}")
@@ -444,6 +510,7 @@ def script_decisions(script_id: str, body: ScriptDecisionsBody):
             claims[dec.index - 1] = fresh
         else:
             raise HTTPException(422, "action phải là accept / reject / edit / reset")
+    _save_state()
     return _script_public(sc)
 
 
@@ -458,6 +525,7 @@ def script_accept_matching(script_id: str):
         if c["nhan"] == "KHOP_NGUON" and c["quyet_dinh"] == "chua_quyet":
             c["quyet_dinh"] = "chap_nhan"
             n += 1
+    _save_state()
     return dict(_script_public(sc), vua_chap_nhan=n)
 
 
@@ -469,6 +537,7 @@ def script_submit(script_id: str):
         raise HTTPException(409, "còn %d câu chưa quyết định" % left)
     res = tools.submit_for_review({"kind": "script", "buoi": sc["buoi"], "claims": sc["claims"]})
     sc["stage"], sc["status"], sc["review_id"] = "da_ra_soat", res["status"], res["draft_id"]
+    _save_state()
     return _script_public(sc)
 
 
@@ -491,3 +560,5 @@ UI_DIR = os.path.join(ROOT, "ui")
 if os.path.isdir(UI_DIR):
     from fastapi.staticfiles import StaticFiles
     app.mount("/ui", StaticFiles(directory=UI_DIR, html=True), name="ui")
+
+_load_state()
