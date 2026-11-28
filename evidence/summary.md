@@ -49,5 +49,5 @@ Chưa có nguồn thứ hai đủ để kiểm lại khảo sát. Đào data pre
 - Pain **có thật nhưng mức vừa**: phần lớn kiểm bằng trí nhớ (14/20), 7/20 mất từ 31 phút trở lên mỗi bài, nhưng mức phiền và mức lo trung bình đều dưới 3/5.
 - Các phần được nêu "tốn công" xoay quanh **kiểm đáp án / câu hỏi**, **tìm nguồn** và **cập nhật nội dung** — khớp với lát cắt (gắn nguồn cho từng câu, đối chiếu đoạn mới nhất).
 - AI đã được dùng khá phổ biến (11/20): sản phẩm cần khác biệt ở chỗ **gắn mã đoạn và kiểm từng câu**, không chỉ sinh nội dung.
-- Giả thuyết ở `evidence/hypothesis.md`: **chưa có giả thuyết viết trước** (file vẫn là mẫu trống) → nhóm tự điền và ghi đúng thời điểm thật; không viết ngược thời gian.
+- Giả thuyết ở `evidence/hypothesis.md`: bản gốc nhóm viết ở `canvas.md` dòng 4, commit 16:52 ngày 27/11 (trước khi gửi khảo sát lúc 17:26); file này chép lại ngày 28/11 07:15 kèm phần đối chiếu: giả thuyết "mỗi bài mất ≥1 giờ" **không được ủng hộ** (3/20), pain mức vừa.
 - Chưa biết: nhu cầu thật với phần **soạn quiz + slide có giọng thuyết trình** (khảo sát chỉ hỏi việc kiểm tra); khảo sát chưa xác minh người trả lời có ngoài nhóm.
