@@ -45,7 +45,16 @@ Kết quả từng câu: `eval/run-1.csv` … `eval/run-4.csv`. Trace: `traces/r
 ## 4. Còn lại
 
 - **100% có thể lạc quan:** có 4 lượt chạy lặp trên cùng bộ 25 câu và mỗi lần sửa nhắm vào câu vừa trượt, nên có rủi ro sửa theo bộ câu. Chưa kiểm trên câu ngoài bộ; câu giám khảo đưa tại chỗ có thể trượt. Các sửa đều là quy tắc chung (chuẩn hoá nhãn, lọc khẳng định bịa, ngân sách token), không so khớp input của bộ câu thử.
-- **Model chập chờn:** cùng input có thể ra khác nhau (vd cờ chèn chỉ dẫn ở B05 `run-3`; B13 ở `run-5` ra nội dung lạc đề nhưng `run-6` và 4 lần chạy riêng đều đúng). Hai lượt liên tiếp `run-5` (96%) và `run-6` (100%) trên cùng mã cho kết quả khác nhau một câu, nên con số 100% không nên đọc là chắc chắn; cần chạy mỗi câu ≥3 lần để đo độ ổn định (chưa làm).
+- **Model chập chờn:** cùng input có thể ra khác nhau (vd cờ chèn chỉ dẫn ở B05 `run-3`; B13 ở `run-5` ra nội dung lạc đề nhưng `run-6` và 4 lần chạy riêng đều đúng). Hai lượt liên tiếp `run-5` (96%) và `run-6` (100%) trên cùng mã cho kết quả khác nhau một câu, nên con số 100% không nên đọc là chắc chắn; đã đo độ ổn định ở `eval/stability-1.md` (mục 5).
 - **Chấm một người:** cột `pass` do người viết code chấm; metric `ban_sinh_dat` (mục d) và `tu_choi_dung` chấm bằng người. Cần người thứ hai chấm thử 5 output.
 - **Kho nguồn nhỏ:** 14 đoạn do nhóm tự viết (`synthetic`); chưa kiểm ở tài liệu thật 20–80 trang. Retrieval so khớp từ khoá, chưa dùng embedding.
 - Nếu có thêm 1 tuần: nạp tài liệu thật của khoá, thêm bộ câu thử ngoài bộ để kiểm khái quát, chạy mỗi câu nhiều lần, thêm chỉ số về học (nếu hướng lớp học kiểu mới), người thứ hai chấm 10–15 output.
+
+## 5. Độ ổn định (chạy mỗi câu 3 lần)
+
+`python eval/stability.py --runs 3` → `eval/stability-1.csv`, `eval/stability-1.md` (25 câu × 3 lần, chi ước tính ~3,3 USD theo giá thật qua proxy). Không phải lượt `run-N`, không thay cột `pass` chấm tay; chỉ so nhãn và mã đoạn giữa các lần.
+
+- **Nhãn:** 24/25 câu cho cùng nhãn ở cả 3 lần. Câu lệch: **B09** (một lần ra hai nhãn SAI_NGUON thay vì một).
+- **Nhãn + tập mã đoạn:** 19/25. Phần lệch là do số mã đoạn được trích thay đổi giữa các lần (B13, B14, B15, B23, B04: lần thì thêm / bớt một mã đoạn phụ). B13 nhãn luôn SAI_NGUON nhưng mã D04-Q01 chỉ xuất hiện ở 2/3 lần, các lần còn lại chỉ trích D04-S01 / D04-S02 (tiêu chí của B13 chấp nhận D04-Q01 hoặc D04-S02). **B04** thỉnh thoảng trích thêm D01-S06 (đoạn bản cũ mâu thuẫn).
+- Ý nghĩa: nhãn ổn định hơn mã đoạn phụ; mức ổn định này đo trên kho 14 đoạn, chưa đo trên tài liệu thật. Chưa chấm lại `pass` cho 75 đầu ra này.
+

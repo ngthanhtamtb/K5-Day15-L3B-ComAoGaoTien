@@ -91,7 +91,8 @@ pre{background:#f3f5f8;border-radius:8px;padding:10px 14px;font-size:15.5px;marg
 <li>Luồng cố định, không agent tự quyết</li>
 <li>Không có endpoint xuất bản: mọi đầu ra luôn <code>cho_duyet</code></li>
 <li>Không có nguồn → báo, không bịa</li>
-<li>Xuất: quiz PDF, slide HTML + giọng đọc (edge-tts)</li></ul></div></div>
+<li>Xuất: quiz PDF, slide HTML + giọng đọc (edge-tts)</li>
+<li>Nạp tài liệu thật: PDF / DOCX / TXT → đoạn có mã</li></ul></div></div>
 <div class="ft"><span>Nguồn: spec.md §4, §9</span><span>3/8</span></div></section>
 
 <!-- 4 -->
@@ -129,7 +130,8 @@ Lý do: đáp án đúng theo nguồn là B
 </table>
 <ul><li><b>Chuẩn "đạt" chốt trước CP2:</b> ≥ 70% tổng, <b>và</b> 100% câu từ chối, <b>và</b> trích đúng nguồn 100%.</li>
 <li><b>Lỗi chính lượt 1:</b> mã đoạn bị hạ nhầm thành THIEU_NGUON (B12–B15) → <b>0/4 → 4/4</b>. B13, B15 là đáp án sai lọt qua: lỗi nguy hiểm nhất.</li>
-<li><b>Lạc quan có thể:</b> chạy lặp trên cùng bộ 25 câu; cùng mã chạy hai lần ra 24/25 và 25/25; chưa kiểm câu ngoài bộ; <b>một người chấm</b>, chưa có người thứ hai.</li></ul>
+<li><b>Lạc quan có thể:</b> chạy lặp trên cùng bộ 25 câu; cùng mã chạy hai lần ra 24/25 và 25/25; chưa kiểm câu ngoài bộ; <b>một người chấm</b>, chưa có người thứ hai.</li>
+<li><b>Độ ổn định (mỗi câu chạy 3 lần):</b> nhãn giống nhau ở <b>24/25</b> câu; nhãn + mã đoạn giống nhau ở <b>19/25</b> (phần lệch: mã đoạn phụ thêm / bớt).</li></ul>
 <div class="ft"><span>Nguồn: eval/report.md, eval/README.md, eval/run-N.csv</span><span>5/8</span></div></section>
 
 <!-- 6 -->
@@ -158,7 +160,7 @@ Lý do: đáp án đúng theo nguồn là B
 <tr><th style="width:16%">Căn cứ</th><th>Số</th></tr>
 <tr><td><b>Nên làm</b></td><td>Chi phí model ~$0,13 / người / tháng (cả khi nhân 6,5: ~$0,83) so với ~12 giờ công ước tính — trang 6. Pain có thật nhưng vừa: 14/20 kiểm bằng trí nhớ, 7/20 mất ≥ 31 phút / bài — trang 1.</td></tr>
 <tr><td><b>Chạy được</b></td><td>25/25 ở lượt 2 (từ 20/25), đạt cả ba vế chuẩn; 100% câu từ chối; nhãn nguy hiểm nhất (SAI_NGUON) bắt được ở B13, B15 — trang 5.</td></tr>
-<tr><td><b>Chưa chắc</b></td><td>Kho 14 đoạn tự viết · một người chấm · chưa có phỏng vấn ngoài khảo sát · chưa đo độ ổn định · chưa kiểm câu ngoài bộ · impact 96 giờ là tự ước tính.</td></tr>
+<tr><td><b>Chưa chắc</b></td><td>Kho 14 đoạn tự viết · một người chấm · chưa có phỏng vấn ngoài khảo sát · mã đoạn chưa ổn định hẳn (19/25 giống nhau qua 3 lần) · chưa kiểm câu ngoài bộ · impact 96 giờ là tự ước tính.</td></tr>
 </table>
 <ul><li><b>Vì sao không "go":</b> chưa thử trên tài liệu thật 20–80 trang và chưa có người thứ hai chấm.</li>
 <li><b>Vì sao không "stop":</b> chi phí thấp, lỗi chính đã được sửa bằng quy tắc chung, hai cổng duyệt của người giữ rủi ro trong tầm kiểm soát.</li></ul>
@@ -170,11 +172,11 @@ Lý do: đáp án đúng theo nguồn là B
 <div class="sub">Ba việc, mỗi việc trỏ về một lỗi / điểm yếu còn lại</div>
 <table>
 <tr><th style="width:5%">#</th><th>Việc</th><th>Trỏ về</th></tr>
-<tr><td>1</td><td><b>Nạp tài liệu thật của khoá</b> (20–80 trang), thêm bộ câu thử ngoài bộ hiện tại; thay tra từ khoá bằng embedding</td><td>Kho 14 đoạn synthetic; 100% có thể lạc quan (eval/report.md mục 4)</td></tr>
-<tr><td>2</td><td><b>Đo độ ổn định:</b> chạy mỗi câu ≥ 3 lần; thêm <b>người thứ hai chấm</b> 10–15 output</td><td>run-5 24/25 vs run-6 25/25 trên cùng mã; chấm một người</td></tr>
+<tr><td>1</td><td><b>Chạy bộ câu thử trên tài liệu thật của khoá</b> (đã nạp được PDF / DOCX, chưa đo), thêm câu thử ngoài bộ; thay tra từ khoá bằng embedding</td><td>Kho 14 đoạn synthetic; 100% có thể lạc quan (eval/report.md mục 4)</td></tr>
+<tr><td>2</td><td><b>Giảm lệch mã đoạn giữa các lần</b> (19/25 ổn định) và thêm <b>người thứ hai chấm</b> 10–15 output</td><td>stability-1: B04, B13, B15, B23 lệch mã đoạn; B09 lệch nhãn; chấm một người</td></tr>
 <tr><td>3</td><td><b>Phỏng vấn 4 người đã đồng ý</b> (phiếu 3, 7, 10, 12), cho giảng viên thử và ghi log; thêm retry cho HTTP 403 khi dùng thật</td><td>Chưa có phỏng vấn; 7/100 phiên lỗi rate limit</td></tr>
 </table>
-<ul><li>Chưa làm: nút Đạt / Cần sửa trong panel kiểm, đăng nhập cho API, đo thời gian với kịch bản 30–40 câu.</li></ul>
+<ul><li>Chưa làm: đăng nhập cho API, đo thời gian với kịch bản 30–40 câu.</li></ul>
 <div class="ft"><span>Nguồn: eval/report.md mục 4, evidence/summary.md, cost/cost-estimate.md</span><span>8/8</span></div></section>
 
 <script>

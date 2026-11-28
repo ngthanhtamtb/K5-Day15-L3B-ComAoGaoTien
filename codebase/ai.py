@@ -19,6 +19,7 @@ Nối model thật: điền .env (chép từ .env.example), rồi viết nhánh 
 """
 import json
 import os
+import re
 import time
 import urllib.error
 import urllib.request
@@ -50,7 +51,7 @@ API_KEY = (os.environ.get("API_KEY") or "").strip()
 API_BASE_URL = (os.environ.get("API_BASE_URL") or "https://api.anthropic.com").strip().rstrip("/")
 SHOW_RAW = False   # True: in nguyên phản hồi API khi cần tìm tên trường
 MAX_TOKENS = 8192
-RETRIES = 3
+RETRIES = 4
 
 
 def post_json(url, headers, body, timeout=120):
@@ -68,10 +69,17 @@ def post_json(url, headers, body, timeout=120):
                 print(json.dumps(data, ensure_ascii=False, indent=2)[:3000])
             return data
         except urllib.error.HTTPError as e:
-            msg = "HTTP %d: %s" % (e.code, e.read().decode("utf-8", "replace")[:300])
-            last = RuntimeError(msg)
-            if e.code not in (429, 500, 502, 503, 529):
+            body_text = e.read().decode("utf-8", "replace")
+            last = RuntimeError("HTTP %d: %s" % (e.code, body_text[:300]))
+            # Proxy của nhóm báo giới hạn tốc độ bằng HTTP 403 rate_limit_error ("Try again in N seconds"):
+            # 7/100 phiên mô phỏng simulate-1 chết vì lỗi này. Thử lại như 429, chờ đúng số giây proxy yêu cầu.
+            rate_limited = e.code == 403 and "rate_limit" in body_text
+            if e.code not in (429, 500, 502, 503, 529) and not rate_limited:
                 raise last
+            if rate_limited:
+                m = re.search(r"in\s+(\d+(?:\.\d+)?)\s+second", body_text)
+                time.sleep(min(float(m.group(1)) + 1 if m else 5, 30))
+                continue
         except (urllib.error.URLError, TimeoutError) as e:
             last = RuntimeError("lỗi mạng: %s" % e)
         time.sleep(2 * (attempt + 1))

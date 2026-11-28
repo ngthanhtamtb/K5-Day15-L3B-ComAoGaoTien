@@ -38,9 +38,17 @@ Mã đoạn dạng `D01-S02` (prototype ghi `DAY01-S02`: giao diện tự đổi
 
 Các bước phải theo thứ tự cổng 1 → build → cổng 2 → submit; sai thứ tự trả 409. Mục sửa ở cổng 1 / 2 gộp lên mục gốc (khoá không gửi, vd `segment_id`, giữ nguyên); thiếu khoá bắt buộc trả 422.
 
+## Nạp tài liệu thật
+
+- `POST /api/kho/upload` `{filename, content_b64, title?, buoi?}` — `filename` đuôi `.pdf` / `.docx` / `.txt` / `.md` (≤ 5 MB), `content_b64` là nội dung file mã hoá base64. Trích chữ → cắt đoạn ~200–900 ký tự → mã `D{buoi}-S{nn}` (buổi tự chọn từ 10, 1–9 dành cho kho gốc) → lưu ở `data/uploads/segments.json` (không commit). Trả `{buoi, ten, so_doan, doan}`; lỗi định dạng / quá lớn / rỗng → 422 (thông báo tiếng Việt). Không gọi model, không tốn token.
+- `DELETE /api/kho/{buoi}` — xoá tài liệu đã nạp (buổi ≥ 10; buổi 1–9 → 403; không có → 404).
+- `GET /api/kho` thêm khoá `tai_len` (true với tài liệu nạp). Tài liệu nạp dùng được ở mọi endpoint như kho gốc (tra nguồn, sinh quiz / slide, rà soát).
+- Bộ câu thử `eval` / `simulate` phải chạy trên kho gốc: đặt biến môi trường `A3_NO_UPLOADS=1` (bỏ qua `data/uploads/`). `eval/stability.py` tự đặt biến này.
+- Tra nguồn là so khớp từ khoá (IDF, bỏ dấu), chưa dùng embedding; PDF dạng ảnh quét (không có lớp chữ) không trích được.
+
 ## Chưa làm / giới hạn
 
-- `options` (mẫu trình bày, tỉ lệ khung, ghi chú người nói, bộ quiz đi kèm) **chỉ được lưu lại, chưa áp dụng** khi dựng slide.
+- `options` cho slide: `mau` ("AI20K chuẩn" | "Tối giản"), `ty_le` ("16:9" | "4:3"), `ghi_chu` (bool, hiện lời thuyết trình) **được áp dụng** khi dựng slide HTML (`exporters.render_slides`); giá trị lạ bị bỏ qua. Khoá khác (vd `quiz`) chỉ được lưu lại — giao diện dùng `quiz` để tạo thêm một bản nháp quiz riêng.
 - Quiz đi kèm slide là một bản nháp riêng (`kind:"quiz"`), không tự sinh cùng lúc.
 - Lệnh gọi model được tuần tự hoá bằng khoá (trace dùng biến toàn cục), nên nhiều người dùng cùng lúc phải xếp hàng. Rà soát kịch bản dài (30–40 câu) chưa được đo thời gian.
 - Chi phí trong `trace` tính theo giá niêm yết BTC; chi thật qua proxy cao hơn khoảng 6,5 lần (`cost/cost-estimate.md` §5).

@@ -65,8 +65,18 @@ def export_quiz_pdf(quiz: list[dict], out_dir: str, title: str = "Quiz") -> dict
     return paths
 
 
-def render_slides(slides: list[dict], out_dir: str, title: str = "Slide", audio: dict | None = None) -> str:
-    """Write an escaped HTML deck; audio files remain relative external assets."""
+def render_slides(slides: list[dict], out_dir: str, title: str = "Slide", audio: dict | None = None,
+                  options: dict | None = None) -> str:
+    """Write an escaped HTML deck; audio files remain relative external assets.
+
+    options (tuỳ chọn, giá trị lạ bị bỏ qua): mau "AI20K chuẩn" | "Tối giản", ty_le "16:9" | "4:3",
+    ghi_chu bool (hiện lời thuyết trình dưới mỗi slide, mặc định True). Không truyền → hành vi cũ."""
+    options = options or {}
+    minimal = options.get("mau") == "Tối giản"
+    ratio = {"16:9": "16/9", "4:3": "4/3"}.get(options.get("ty_le"))
+    show_notes = options.get("ghi_chu", True) is not False
+    extra_css = (("body{background:#fff}section{border:1px solid #ccc;border-radius:0;padding:1.2rem}" if minimal else "")
+                 + (f"section{{aspect-ratio:{ratio};overflow:auto}}" if ratio else ""))
     directory = Path(out_dir)
     directory.mkdir(parents=True, exist_ok=True)
     safe = lambda value: escape(str(value), quote=True)
@@ -82,8 +92,9 @@ def render_slides(slides: list[dict], out_dir: str, title: str = "Slide", audio:
         sections.append(
             f'<section class="slide"{hidden}><h2>{safe(slide["tieu_de"])}</h2>'
             f'<ul>{points}</ul><p>Nguồn: {safe(slide["segment_id"])}</p>'
-            f'<details><summary>Lời thuyết trình</summary><p>{safe(slide["loi_thuyet_trinh"])}</p></details>'
-            f'{player}</section>'
+            + (f'<details><summary>Lời thuyết trình</summary><p>{safe(slide["loi_thuyet_trinh"])}</p></details>'
+               if show_notes else "")
+            + f'{player}</section>'
         )
     content = """<!doctype html><html lang="vi"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -92,6 +103,7 @@ body{font-family:Arial,sans-serif;max-width:960px;margin:2rem auto;padding:0 1re
 section{background:white;padding:2rem;border-radius:12px}li{margin:1rem 0}
 p,li,h1,h2{white-space:pre-wrap;overflow-wrap:anywhere}button{padding:.7rem 1rem;margin:1rem .3rem}
 audio{display:block;margin-top:1rem;max-width:100%}summary{cursor:pointer}[hidden]{display:none}
+""" + extra_css + """
 </style></head><body><h1>""" + safe(title) + "</h1>" + "".join(sections) + """
 <nav aria-label="Điều hướng"><button id="previous" type="button">Trước</button>
 <span id="position" aria-live="polite"></span><button id="next" type="button">Sau</button></nav>

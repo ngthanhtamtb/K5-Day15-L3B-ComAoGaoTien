@@ -12,6 +12,8 @@ Vòng đời một bản nháp (KHÔNG có endpoint xuất bản / gửi học v
     POST /api/drafts/{id}/submit         chốt bản nháp: status "cho_duyet"            stage = cho_duyet
     POST /api/review                     kiểm một đoạn nội dung bất kỳ (DUYET_KICH_BAN / DUYET_QUIZ / DUYET_CUOI)
 """
+import base64
+import datetime
 import os
 import re
 import sys
@@ -28,6 +30,7 @@ from pydantic import BaseModel
 
 import agent
 import exporters
+import ingest
 import tools
 import tracing
 from tools import available_sessions
@@ -57,7 +60,7 @@ class CreateBody(BaseModel):
     chu_de: str = ""                 # bắt buộc khi không có script_id
     so_luong: int = 3
     script_id: Optional[str] = None  # dựng từ kịch bản đã rà soát (POST /api/scripts)
-    options: Optional[dict] = None   # mẫu, tỉ lệ khung, ghi chú người nói… — chỉ lưu lại, CHƯA áp dụng khi dựng slide
+    options: Optional[dict] = None   # slide: mau, ty_le, ghi_chu — áp dụng khi dựng slide (exporters.render_slides)
 
 
 class Decision(BaseModel):
@@ -208,7 +211,7 @@ def build(draft_id: str):
                     audio[i] = exporters.synthesize_voice(i, it["loi_thuyet_trinh"], out)
                 except RuntimeError as exc:      # TTS lỗi mạng: vẫn dựng slide, báo rõ slide nào thiếu audio
                     errors[i] = str(exc)
-            html = exporters.render_slides(d["items"], out, "Slide buổi %d — %s" % (d["buoi"], d["chu_de"]), audio)
+            html = exporters.render_slides(d["items"], out, "Slide buổi %d — %s" % (d["buoi"], d["chu_de"]), audio, d["options"])
             d["files"] = dict({"slides_html": html}, **{"audio_%d" % i: p for i, p in audio.items()})
             d["audio_errors"] = errors
     except RuntimeError as exc:
@@ -240,7 +243,7 @@ def gate2(draft_id: str, body: DecisionsBody):
             except RuntimeError as exc:
                 d.setdefault("audio_errors", {})[i] = str(exc)
         audio = {int(k.split("_")[1]): v for k, v in d["files"].items() if k.startswith("audio_")}
-        d["files"]["slides_html"] = exporters.render_slides(items, out, title, audio)
+        d["files"]["slides_html"] = exporters.render_slides(items, out, title, audio, d["options"])
     else:
         d["files"] = exporters.export_quiz_pdf(items, out, title)
     return {"draft": _public(d), "kiem_lai_muc_sua": checks}
@@ -278,8 +281,44 @@ def kho():
         cur = [s for s in segs if "bản cũ" not in s["session"]] or segs      # đoạn bản cũ không tính vào ngày cập nhật
         out.append({"buoi": buoi, "ten": re.sub(r"\s*\(bản cũ\)", "", cur[0]["session"]), "so_doan": len(segs),
                     "cap_nhat": max(s["updated_date"] for s in cur), "co_ban_cu": len(cur) != len(segs),
-                    "doan": [s["segment_id"] for s in segs]})
+                    "doan": [s["segment_id"] for s in segs], "tai_len": buoi >= 10})
     return sorted(out, key=lambda x: x["buoi"])
+
+
+class UploadBody(BaseModel):
+    filename: str                    # .pdf / .docx / .txt / .md
+    content_b64: str                 # nội dung file, base64 (không dùng multipart để khỏi thêm phụ thuộc)
+    title: str = ""                  # mặc định: tên file bỏ đuôi
+    buoi: Optional[int] = None       # mặc định: số buổi trống tiếp theo (từ 10)
+
+
+@app.post("/api/kho/upload")
+def kho_upload(body: UploadBody):
+    """Nạp tài liệu thật: trích chữ → cắt đoạn có segment_id (D10-S01…) → vào kho. Chỉ lưu cục bộ, không gọi model."""
+    try:
+        raw = base64.b64decode(body.content_b64, validate=True)
+    except ValueError:
+        raise HTTPException(422, "content_b64 không phải base64 hợp lệ")
+    title = body.title.strip() or os.path.splitext(os.path.basename(body.filename))[0]
+    try:
+        text = ingest.extract_text(body.filename, raw)
+        buoi = body.buoi if body.buoi is not None else tools.next_upload_buoi()
+        segs = ingest.build_segments(title, text, buoi, datetime.date.today().isoformat())
+        tools.add_upload(segs)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+    return {"buoi": buoi, "ten": segs[0]["session"], "so_doan": len(segs), "doan": [s["segment_id"] for s in segs]}
+
+
+@app.delete("/api/kho/{buoi}")
+def kho_delete(buoi: int):
+    """Xoá tài liệu đã nạp của một buổi (buổi 1–9 của kho gốc không xoá được)."""
+    if buoi < 10:
+        raise HTTPException(403, "không xoá được kho gốc")
+    n = tools.remove_upload(buoi)
+    if not n:
+        raise HTTPException(404, "không có tài liệu nạp ở buổi %d" % buoi)
+    return {"da_xoa": n}
 
 
 @app.get("/api/segments/{segment_id}")

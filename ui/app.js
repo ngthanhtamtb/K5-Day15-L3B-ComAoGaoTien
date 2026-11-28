@@ -95,6 +95,19 @@ function sourceBox(seg, title) {
 
 /* ---------- 1 · Nhập bản nháp ---------- */
 let importBuoi = null, importText = "";
+function uploadDoc(file) {
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) { S.err = "Tài liệu quá lớn (tối đa 5 MB)."; render(); return; }
+  act(async () => {
+    const b64 = await new Promise((ok, no) => {
+      const r = new FileReader(); r.onerror = () => no(new Error("Không đọc được file."));
+      r.onload = () => ok(String(r.result).split(",")[1] || ""); r.readAsDataURL(file);
+    });
+    const r = await api("POST", "/api/kho/upload", { filename: file.name, content_b64: b64 });
+    S.kho = await api("GET", "/api/kho"); importBuoi = r.buoi;
+    S.info = "Đã nạp “" + file.name + "”: " + r.so_doan + " đoạn (" + r.doan[0] + " … " + r.doan[r.doan.length - 1] + "). Đã chọn làm bài pre-class.";
+  });
+}
 function viewImport() {
   if (!S.kho) { api("GET", "/api/kho").then((k) => { S.kho = k; importBuoi = importBuoi || (k[0] && k[0].buoi); render(); }).catch((e) => { S.err = e.message; render(); }); return h("p", {}, "Đang tải kho tài liệu…"); }
   const picked = importBuoi || (S.kho[0] && S.kho[0].buoi);
@@ -124,7 +137,14 @@ function viewImport() {
       h("aside", { class: "card" },
         h("h2", {}, "Kho tài liệu gốc sẽ dùng"),
         S.kho.map((k) => h("div", { style: "margin-bottom:8px" },
-          h("strong", {}, k.ten), h("div", { class: "hint" }, k.so_doan + " đoạn · cập nhật " + fmtDate(k.cap_nhat) + (k.co_ban_cu ? " · có đoạn bản cũ" : "")))),
+          h("strong", {}, k.ten), h("div", { class: "hint" }, k.so_doan + " đoạn · cập nhật " + fmtDate(k.cap_nhat) + (k.co_ban_cu ? " · có đoạn bản cũ" : "") + (k.tai_len ? " · tài liệu bạn nạp" : "")),
+          k.tai_len ? h("button", { disabled: S.busy, "aria-label": "Xoá tài liệu " + k.ten, onclick: () => act(async () => {
+            await api("DELETE", "/api/kho/" + k.buoi); S.kho = await api("GET", "/api/kho");
+            if (importBuoi === k.buoi) importBuoi = S.kho[0].buoi;
+          }, "Đã xoá tài liệu.") }, "Xoá") : null)),
+        h("h2", { style: "margin-top:16px" }, "Nạp tài liệu của bạn"),
+        h("p", { class: "hint" }, "PDF, DOCX, TXT hoặc MD (tối đa 5 MB). Hệ thống cắt thành đoạn có mã (D10-S01…), lưu cục bộ trên máy chạy, không gửi đi đâu khi nạp. Chỉ nạp tài liệu không chứa thông tin cá nhân."),
+        h("input", { type: "file", id: "upl", accept: ".pdf,.docx,.txt,.md", disabled: S.busy, "aria-label": "Chọn tài liệu để nạp", onchange: (e) => uploadDoc(e.target.files[0]) }),
         h("h2", { style: "margin-top:16px" }, "ScriptGuard làm được gì"),
         h("p", {}, "Gắn nhãn Khớp nguồn, Sai / mâu thuẫn nguồn, Thiếu nguồn kèm lý do và mã đoạn. Không chắc thì gắn Thiếu nguồn, không đoán."),
         h("p", {}, "Không sửa kịch bản, không tự xuất bản, không làm theo chỉ dẫn nằm trong kịch bản."))));
@@ -236,7 +256,7 @@ function viewSlideCreate() {
         h("select", { id: "mau", onchange: (e) => { createOpts.mau = e.target.value; } }, ["AI20K chuẩn", "Tối giản"].map((t) => h("option", { selected: t === createOpts.mau }, t))),
         h("label", { class: "f" }, h("input", { type: "checkbox", checked: createOpts.ghi_chu, onchange: (e) => { createOpts.ghi_chu = e.target.checked; } }), " Ghi chú người nói cho từng slide"),
         h("label", { class: "f" }, h("input", { type: "checkbox", checked: createOpts.quiz, onchange: (e) => { createOpts.quiz = e.target.checked; } }), " Kèm bộ quiz 5 câu cho cuối bài (kiểm ở mục Quiz)"),
-        h("div", { class: "hint" }, "Mẫu trình bày, tỉ lệ khung và ghi chú người nói hiện chỉ được lưu lại, chưa áp dụng khi dựng slide."),
+        h("div", { class: "hint" }, "Mẫu trình bày, tỉ lệ khung và ghi chú người nói được áp dụng khi dựng slide HTML."),
         h("div", { class: "row", style: "margin-top:12px" },
           busyBtn("Tạo slide", () => act(async () => {
             const base = { buoi: sc.buoi, script_id: sc.script_id, options: createOpts };
@@ -298,6 +318,13 @@ function itemPreview(kind, it) {
   return h("div", { class: "card" }, h("h2", {}, it.de),
     h("ul", { class: "opts" }, ["A", "B", "C", "D"].map((k) => h("li", { class: k === ans ? "ans" : "" }, h("span", { class: "k" }, k), h("span", {}, it[k]), k === ans ? h("span", { class: "badge b-mute" }, "AI chọn làm đáp án") : null))),
     h("h3", {}, "Giải thích đi kèm (AI sinh)"), h("p", {}, it.giai_thich));
+}
+/* Quyết định mục đang xem từ panel Agent verify (cùng logic với nút trong màn kiểm). */
+function decideCurrent(kind, action) {
+  const st = S[kind], items = st.draft.items, i = Math.min(st.sel, items.length - 1);
+  if (action === "edit") { st.editing = i; S.panel = false; render(); return; }
+  st.dec[i + 1] = { action }; st.editing = null; if (i < items.length - 1) st.sel++;
+  render();
 }
 function viewReview(kind) {
   const st = S[kind], idKey = kind === "slide" ? S.slideId : S.quizId, name = kind === "slide" ? "slide" : "câu quiz";
@@ -422,15 +449,18 @@ function agentContext() {
   if (r === "script" && S.script) {
     const c = S.script.claims[S.sel];
     return { title: "Rà soát kịch bản · câu " + (S.sel + 1) + "/" + S.script.tong_cau, items: c ? [{ nhan: c.nhan, text: c.noi_dung, ly_do: c.ly_do, fix: c.de_xuat_sua, seg: c.nguon }] : [],
-      counts: S.script.claims, traces: S.script.traces || [], script: S.script };
+      counts: S.script.claims, traces: S.script.traces || [], script: S.script,
+      decide: c && c.nhan !== "TU_CHOI" && S.script.stage === "ra_soat" ? { dat: () => decideScript(c.index, "accept"), sua: () => { editingClaim = c.index; S.panel = false; render(); }, now: c.quyet_dinh !== "chua_quyet" ? c.quyet_dinh : null } : null };
   }
   const kind = r === "slide" ? "slide" : r === "quiz" ? "quiz" : null, st = kind && S[kind];
   if (st) {
+    const g1 = st.draft.stage === "cong_1";
     const i = Math.min(st.sel, st.draft.items.length - 1), it = st.draft.items[i], lab = it && itemLabel(st, i);
     const chk = st.gate1[i + 1] || st.gate2[i + 1];
     const items = chk ? chk.nhan.map((x) => ({ nhan: x.nhan, text: x.noi_dung, ly_do: x.ly_do, fix: x.de_xuat_sua, seg: x.segment_id && S.seg[x.segment_id] }))
       : lab && it ? [{ nhan: lab.nhan, text: lab.noi_dung || itemTitle(kind, it, i), ly_do: lab.ly_do, fix: lab.de_xuat_sua, seg: S.seg[it.segment_id] }] : [];
-    return { title: (kind === "slide" ? "Kiểm slide " : "Kiểm câu ") + (i + 1) + "/" + st.draft.items.length, items, counts: st.draft.nhan || [], traces: st.draft.traces || [], draft: st.draft };
+    return { title: (kind === "slide" ? "Kiểm slide " : "Kiểm câu ") + (i + 1) + "/" + st.draft.items.length, items, counts: st.draft.nhan || [], traces: st.draft.traces || [], draft: st.draft,
+      decide: g1 ? { dat: () => decideCurrent(kind, "accept"), sua: () => decideCurrent(kind, "edit"), now: st.dec[i + 1] } : null };
   }
   return { title: "Chưa có dữ liệu kiểm chứng ở bước này", items: [], counts: [], traces: [] };
 }
@@ -455,6 +485,10 @@ function agentPanel() {
       ctx.items.length ? ctx.items.map((x) => h("article", { class: "src" }, h("div", { class: "row" }, badge(x.nhan)), h("p", {}, x.text), x.ly_do ? h("p", { class: "hint" }, x.ly_do) : null,
         x.fix ? h("div", { class: "note info" }, "Gợi ý sửa: " + x.fix) : null, x.seg ? sourceBox(x.seg) : null))
         : h("p", { class: "hint" }, "Chưa có kết quả riêng cho mục này."),
+      ctx.decide ? h("div", { class: "row", style: "margin:10px 0" },
+        h("button", { class: "good", disabled: S.busy, onclick: ctx.decide.dat }, "Đạt"),
+        h("button", { disabled: S.busy, onclick: ctx.decide.sua }, "Cần sửa"),
+        ctx.decide.now ? h("span", { class: "hint" }, "Đang là: " + (({ accept: "Đạt", edit: "Cần sửa", reject: "Bỏ mục", chap_nhan: "Đã chấp nhận", da_sua: "Đã sửa", tu_choi_cau: "Đã từ chối" })[ctx.decide.now.action || ctx.decide.now] || "")) : null) : null,
       h("h3", {}, "Quy trình đã chạy"),
       tr.length ? tr.map((t) => h("div", {}, h("strong", {}, t.nhan), h("ul", { class: "steplist" }, (t.cac_buoc || []).map((s) =>
         h("li", { class: s.loi ? "err" : "" }, [s.loai === "model" ? "call_model" : s.loai === "tool" ? s.ten : "ghi chú", s.model ? " · " + s.model : "", s.tokens_in != null && s.loai === "model" ? " · " + s.tokens_in + " vào / " + s.tokens_out + " ra" : "",

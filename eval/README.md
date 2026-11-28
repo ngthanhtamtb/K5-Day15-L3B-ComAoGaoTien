@@ -29,7 +29,7 @@ Kho đoạn tài liệu `data/sources/segments.json`: 14 đoạn do nhóm tự v
 
 ## 4. Lệnh
 
-`python run.py eval` → `eval/run-N.csv` + `traces/run-N.jsonl` · điền cột `pass` · `python run.py score eval/run-N.csv`
+`python eval/stability.py --runs 3` → độ ổn định (`eval/stability-N.csv`, không thay lượt `run-N`). `python run.py eval` → `eval/run-N.csv` + `traces/run-N.jsonl` · điền cột `pass` · `python run.py score eval/run-N.csv`
 
 ## 5. Đã chạy gì
 
@@ -46,4 +46,4 @@ Lượt chạy lại vì lỗi kỹ thuật, lượt sau CP4: ghi thêm dòng, k
 
 ## 6. Lỗi chính
 
-Nhóm lỗi lớn nhất ở lượt 1: **mã đoạn bị hạ nhầm thành THIEU_NGUON** (B12–B15, trong đó B13 và B15 là đáp án sai lọt qua) — đã sửa, 0/4 → 4/4. Còn lại: lỗi bịa khẳng định / kiểm quá khắt (B05) đã sửa. **Còn rủi ro:** 100% đạt được sau 4 lượt lặp trên cùng bộ 25 câu nên có thể lạc quan; chưa kiểm trên câu ngoài bộ, chưa đo độ ổn định (chạy lại nhiều lần), cột `pass` chưa có người thứ hai chấm. Chi tiết: `eval/report.md`.
+Nhóm lỗi lớn nhất ở lượt 1: **mã đoạn bị hạ nhầm thành THIEU_NGUON** (B12–B15, trong đó B13 và B15 là đáp án sai lọt qua) — đã sửa, 0/4 → 4/4. Còn lại: lỗi bịa khẳng định / kiểm quá khắt (B05) đã sửa. **Còn rủi ro:** 100% đạt được sau 4 lượt lặp trên cùng bộ 25 câu nên có thể lạc quan; chưa kiểm trên câu ngoài bộ, độ ổn định đã đo ở `eval/stability-1.md` (nhãn 24/25 câu ổn định qua 3 lần, nhãn + mã đoạn 19/25), cột `pass` chưa có người thứ hai chấm. Chi tiết: `eval/report.md`.

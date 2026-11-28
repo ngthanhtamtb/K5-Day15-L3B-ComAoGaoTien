@@ -17,6 +17,9 @@ from tracing import tool, TOOLS  # noqa: F401  (TOOLS: danh sách công cụ đ�
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SEGMENTS_PATH = os.path.join(ROOT, "data", "sources", "segments.json")
+# Tài liệu người dùng nạp (buổi ≥ 10) nằm riêng, KHÔNG commit (data/uploads/ trong .gitignore). Bộ câu thử
+# `eval` luôn chạy trên kho gốc 14 đoạn: đặt A3_NO_UPLOADS=1 (run_eval không cần sửa) để bỏ qua tài liệu nạp.
+UPLOADS_PATH = os.path.join(ROOT, "data", "uploads", "segments.json")
 MAX_RESULTS = 5
 SNIPPET_LEN = 220
 
@@ -43,6 +46,9 @@ def load_segments():
     if "segments" not in _cache:
         with open(SEGMENTS_PATH, encoding="utf-8") as f:
             _cache["segments"] = json.load(f)
+        if not os.environ.get("A3_NO_UPLOADS") and os.path.exists(UPLOADS_PATH):
+            with open(UPLOADS_PATH, encoding="utf-8") as f:
+                _cache["segments"] = _cache["segments"] + json.load(f)
         docs = [set(_tokens(s["full_text"] + " " + s["source_title"])) for s in _cache["segments"]]
         n = len(docs)
         df = {}
@@ -53,6 +59,49 @@ def load_segments():
         _cache["titles"] = [set(_tokens(s["source_title"])) for s in _cache["segments"]]
         _cache["idf"] = {t: math.log(1 + n / c) for t, c in df.items()}
     return _cache["segments"]
+
+
+def _read_uploads():
+    if os.path.exists(UPLOADS_PATH):
+        with open(UPLOADS_PATH, encoding="utf-8") as f:
+            return json.load(f)
+    return []
+
+
+def _write_uploads(segs):
+    os.makedirs(os.path.dirname(UPLOADS_PATH), exist_ok=True)
+    if not segs:
+        if os.path.exists(UPLOADS_PATH):
+            os.remove(UPLOADS_PATH)
+    else:
+        with open(UPLOADS_PATH, "w", encoding="utf-8") as f:
+            json.dump(segs, f, ensure_ascii=False, indent=1)
+    _cache.clear()
+
+
+def next_upload_buoi():
+    """Số buổi trống tiếp theo cho tài liệu nạp (từ 10). Không phải công cụ AI."""
+    used = {int(s["segment_id"][1:3]) for s in _read_uploads()}
+    return next(n for n in range(10, 100) if n not in used)
+
+
+def add_upload(segments):
+    """Thêm các đoạn của một tài liệu nạp (cùng một buổi). Không phải công cụ AI — API gọi sau khi người dùng nạp file."""
+    buoi = {s["segment_id"][1:3] for s in segments}
+    if len(buoi) != 1 or int(buoi.copy().pop()) < 10:
+        raise ValueError("tài liệu nạp phải cùng một buổi, số buổi từ 10")
+    current = [s for s in _read_uploads() if s["segment_id"][1:3] not in buoi]
+    _write_uploads(current + list(segments))
+
+
+def remove_upload(buoi):
+    """Xoá tài liệu nạp của một buổi. Trả số đoạn đã xoá (0 nếu không có)."""
+    key = "%02d" % int(buoi)
+    cur = _read_uploads()
+    keep = [s for s in cur if s["segment_id"][1:3] != key]
+    if len(keep) != len(cur):
+        _write_uploads(keep)
+    return len(cur) - len(keep)
 
 
 def available_sessions():

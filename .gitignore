@@ -39,3 +39,6 @@ data-btc
 data-btc/
 team_docs/
 .playwright-mcp/
+
+# Tài liệu người dùng nạp qua giao diện: không commit
+data/uploads/

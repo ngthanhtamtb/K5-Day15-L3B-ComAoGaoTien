@@ -181,6 +181,9 @@ Data BTC cấp đã dùng (nếu có — không commit nguyên file): data/precl
 | 28/11 07:10 | Khảo sát: phiếu 20 được tính hợp lệ (n = 18 → 19 / 22 phiếu), cập nhật các số liên quan ở §0, §1, §2 và `evidence/summary.md`, `data/DATA_CARD.md` | Nhóm bổ sung vai "Giảng viên" (giảng viên hướng dẫn đồ án) vào file gốc cho phiếu trước đó thiếu vai; vẫn dưới ngưỡng 20. `cost/personas.yaml` và `simulate-1` giữ nguyên số n = 18 (không chạy lại) |
 | 28/11 01:26–03:20 | Chạy mô phỏng chi phí `simulate-1` (100 phiên, 93 hợp lệ), điền `cost/cost-estimate.md` và §8 | 7 phiên lỗi 403 rate limit (proxy trả 403 thay vì 429, `ai.py` không thử lại); nhóm chấp nhận 93 phiên; ghi chú chi thật qua proxy cao hơn giá niêm yết ~6,5 lần |
 
+| 28/11 08:30 | Thêm tính năng (không đổi luồng triage → sinh → kiểm, không đổi prompt): nạp tài liệu thật (`codebase/ingest.py`, `/api/kho/upload`, tài liệu nạp ở buổi ≥ 10, lưu `data/uploads/` không commit); `ai.py` thử lại HTTP 403 rate_limit và chờ theo "Try again in N seconds"; áp dụng mẫu / tỉ lệ khung / ghi chú người nói khi dựng slide; nút Đạt / Cần sửa trong panel Agent verify; `eval/stability.py` | 7/100 phiên `simulate-1` chết vì 403; kho 14 đoạn tự viết là rủi ro lớn nhất (`eval/report.md` mục 4); lỗi "100% có thể lạc quan" cần đo độ ổn định |
+| 28/11 09:00 | Chạy `eval/stability.py --runs 3` → `eval/stability-1.csv` / `.md`: nhãn ổn định 24/25 câu, nhãn + mã đoạn 19/25 (B09 lệch nhãn một lần). Không chạy lại `run-N`, không sửa `run-1`…`run-6` | Rủi ro đã ghi: run-5 24/25 và run-6 25/25 trên cùng mã; chạy ở kho gốc (`A3_NO_UPLOADS=1`) |
+
 **Sau CP4 (đến 23:59 Thứ Bảy 28/11)** (sửa theo góp ý — không sửa chuẩn "đạt", câu thử, số bằng chứng, kết quả các lượt đã chạy)
 
 | Thời điểm | Đổi gì | Vì sao |
