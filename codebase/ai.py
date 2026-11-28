@@ -17,7 +17,11 @@ Chế độ giả (mặc định khi .env chưa có MODEL_PROVIDER, hoặc MODEL
 Nối model thật: điền .env (chép từ .env.example), rồi viết nhánh gọi API ở dưới theo docs/connect-model.md
 (có ví dụ OpenAI, Claude, model chạy trên máy, và cách nối nhà cung cấp khác). Không dán API key vào file này.
 """
+import json
 import os
+import time
+import urllib.error
+import urllib.request
 
 from tracing import model_call
 
@@ -43,14 +47,66 @@ MODEL_NAME = (os.environ.get("MODEL_NAME") or "").strip()
 API_KEY = (os.environ.get("API_KEY") or "").strip()
 
 
+API_BASE_URL = (os.environ.get("API_BASE_URL") or "https://api.anthropic.com").strip().rstrip("/")
+SHOW_RAW = False   # True: in nguyên phản hồi API khi cần tìm tên trường
+MAX_TOKENS = 8192
+RETRIES = 3
+
+
+def post_json(url, headers, body, timeout=120):
+    """POST JSON, trả JSON phản hồi. Chỉ dùng urllib. Thử lại khi 429/5xx hoặc lỗi mạng."""
+    data_bytes = json.dumps(body).encode("utf-8")
+    last = None
+    for attempt in range(RETRIES):
+        req = urllib.request.Request(
+            url, data=data_bytes, method="POST",
+            headers=dict({"Content-Type": "application/json"}, **headers))
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                data = json.loads(r.read().decode("utf-8"))
+            if SHOW_RAW:
+                print(json.dumps(data, ensure_ascii=False, indent=2)[:3000])
+            return data
+        except urllib.error.HTTPError as e:
+            msg = "HTTP %d: %s" % (e.code, e.read().decode("utf-8", "replace")[:300])
+            last = RuntimeError(msg)
+            if e.code not in (429, 500, 502, 503, 529):
+                raise last
+        except (urllib.error.URLError, TimeoutError) as e:
+            last = RuntimeError("lỗi mạng: %s" % e)
+        time.sleep(2 * (attempt + 1))
+    raise last
+
+
+def call_claude(system, user, model):
+    """Model có token suy nghĩ tính vào max_tokens: nếu bị cắt (max_tokens) mà chưa có chữ trả lời thì gọi lại với
+    ngân sách gấp đôi (tối đa 3 lần). Token của MỌI lần gọi đều được cộng, vì đều tốn tiền."""
+    budget, tin, tout = MAX_TOKENS, 0, 0
+    for _ in range(3):
+        data = post_json(API_BASE_URL + "/v1/messages",
+                         {"x-api-key": API_KEY, "anthropic-version": "2023-06-01"},
+                         {"model": model, "max_tokens": budget, "system": system or "",
+                          "messages": [{"role": "user", "content": user}]})
+        text = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
+        u = data["usage"]
+        tin += u["input_tokens"]
+        tout += u["output_tokens"]
+        if text.strip() or data.get("stop_reason") != "max_tokens":
+            break
+        budget *= 2
+    return {"text": text, "tokens_in": tin, "tokens_out": tout}
+
+
 @model_call
-def call_model(system: str, user: str) -> dict:
+def call_model(system: str, user: str, model: str = None) -> dict:
+    """model=None dùng MODEL_NAME trong .env. Luồng hai model: truyền tên model cho từng lần gọi."""
     if MODEL_PROVIDER == "fake":
         last = (user.strip().splitlines() or [""])[-1]
         return {"text": "[câu trả lời giả — chưa nối model] " + last[:60], "model": "fake", "tokens_in": 0, "tokens_out": 0}
-
-    # NHÓM VIẾT: gọi model thật ở đây (theo MODEL_PROVIDER, MODEL_NAME, API_KEY) rồi trả đúng 4 khoá.
-    # Ví dụ chép được cho từng nhà cung cấp: docs/connect-model.md mục 2.
-    raise NotImplementedError(
-        "chưa viết phần gọi model thật cho MODEL_PROVIDER=%s trong codebase/ai.py — xem docs/connect-model.md"
-        % MODEL_PROVIDER)
+    name = model or MODEL_NAME
+    if MODEL_PROVIDER == "anthropic":
+        r = call_claude(system, user, name)
+    else:
+        raise NotImplementedError("MODEL_PROVIDER=%s chưa được hỗ trợ trong codebase/ai.py" % MODEL_PROVIDER)
+    return {"text": r["text"], "model": name,
+            "tokens_in": int(r["tokens_in"]), "tokens_out": int(r["tokens_out"])}

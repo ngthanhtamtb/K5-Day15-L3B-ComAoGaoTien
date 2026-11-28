@@ -35,11 +35,11 @@
 | | |
 |---|---|
 | Dùng để làm gì | Gợi tình huống cho bộ câu thử (B03, B04, B10–B15, B17, B20) và phần `why` của metric; bằng chứng pain ghi ở `evidence/` |
-| Từ đâu | Google Form nhóm gửi trong lớp chiều 27/11/2026 (17:47–18:54) |
-| Xử lý những bước gì | Bỏ 1 phiếu vai "Sinh viên" (không phải người dùng, bỏ trống gần hết) · không dùng cột liên hệ (cả 8 phiếu đều trống) · chỉ dùng số tổng hợp và trích ngắn câu trả lời |
-| Số dòng / số đoạn | 8 phiếu, **7 hợp lệ**: giảng viên chuyên môn 3 · người soạn 1 · biên tập/sản xuất 3 |
-| Phiên bản / ngày lấy | Xuất ngày 27/11/2026 |
+| Từ đâu | Google Form nhóm gửi trong lớp chiều 27/11/2026 (17:26–18:32) |
+| Xử lý những bước gì | Loại 3 phiếu (2 phiếu tháng qua kiểm 0 bài · 1 vai "Sinh viên") theo quy tắc ghi ở `evidence/survey/questions.md` · bỏ cột liên hệ khỏi repo · chỉ dùng số tổng hợp và trích ngắn câu trả lời; log ẩn danh: `evidence/survey/results.csv` |
+| Số dòng / số đoạn | 23 phiếu, **20 hợp lệ**: giảng viên chuyên môn 10 · người soạn 5 · biên tập/sản xuất 4 · trợ giảng 1 |
+| Phiên bản / ngày lấy | Xuất ngày 28/11/2026 (bản cập nhật; bản đầu 27/11 có 8 phiếu) |
 | Nhãn | thật |
-| Giới hạn | **n = 7, dưới ngưỡng 20 của khảo sát** → chỉ tham khảo. Trộn nhiều vai. Khảo sát hỏi về **kiểm tra** bài giảng, chưa hỏi về việc soạn quiz / làm slide hay nhu cầu giọng thuyết trình → hướng mới cần phỏng vấn để kiểm. Mức phiền trung bình 2,1/5, lo sót lỗi 2,4/5 — pain chưa mạnh; 4/7 người kiểm xong trong 30 phút trở xuống |
+| Giới hạn | **n = 20, đạt ngưỡng 20 của khảo sát.** Trộn nhiều vai. Khảo sát hỏi về **kiểm tra** bài giảng, chưa hỏi về việc soạn quiz / làm slide hay nhu cầu giọng thuyết trình. Mức phiền trung bình 2,9/5, lo sót lỗi 2,8/5 — pain mức vừa; 11/20 người kiểm xong trong 30 phút trở xuống |
 
-Số chính (7 phiếu hợp lệ): duyệt ≥6 bài/tháng 3/7 · bài 20–40 trang 3/7, 41–80 trang 3/7 · thời gian kiểm 1 bài: dưới 15 phút 2, 15–30 phút 2, 31–60 phút 1, 1–2 tiếng 2 · cách kiểm: trí nhớ 5/7, nguồn ghi sẵn 5/7, mở tài liệu so 3/7 · đã dùng AI/NotebookLM hỗ trợ: 3/7.
+Số chính (20 phiếu hợp lệ): duyệt ≥6 bài/tháng 5/20 · bài 20–40 trang 9/20, 41–80 trang 4/20 · thời gian kiểm 1 bài: dưới 15 phút 4, 15–30 phút 7, 31–60 phút 4, 1–2 tiếng 2, trên 2 tiếng 1, không nhớ 2 · cách kiểm: trí nhớ 14/20, nguồn ghi sẵn 10/20, mở tài liệu so 9/20 · đã dùng AI hỗ trợ: 11/20.

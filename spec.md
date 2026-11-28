@@ -3,7 +3,7 @@
 > Mốc nộp: §7 chốt chuẩn "đạt" tại **CP2 19:30 Thứ Sáu 27/11** · §0–§7 nộp **CP3 10:00 Thứ Bảy 28/11** · đủ §0–§10 **CP4 14:30 Thứ Bảy 28/11** · §10 changelog ghi tiếp đến **23:59 Thứ Bảy 28/11**.
 
 Track: [x] A · [ ] B · [ ] C · [ ] D · [ ] E — bài toán: A3 · Sản xuất bài giảng bằng AI — tạo quiz trắc nghiệm (PDF) và slide có giọng thuyết trình, mỗi sản phẩm qua 2 cổng duyệt đối chiếu tài liệu gốc
-Data BTC cấp đã dùng (nếu có — không commit nguyên file): data/preclass/ (đào gián tiếp — tỉ lệ sai câu hỏi video)
+Data BTC cấp đã dùng (nếu có — không commit nguyên file): data/preclass/ (chỉ thăm dò tỉ lệ sai lần đầu của bài kiểm tra sau học: không câu nào sai ≥50%; không dùng làm bằng chứng pain — xem `evidence/summary.md`)
 
 ## §0. Hiện tại việc này diễn ra thế nào *(guide 1.1)*
 
@@ -13,7 +13,7 @@ Data BTC cấp đã dùng (nếu có — không commit nguyên file): data/precl
   3. Kiểm nội dung bằng cách mở từng tài liệu gốc ra so, dựa vào trí nhớ, hoặc tin vào nguồn đã ghi sẵn trong bài.
   4. Sai thì sửa slide / quay lại đoạn video / sửa đáp án → kiểm lại.
   5. Xuất bản lên trang pre-class cho học viên.
-- Công cụ đang được dùng (khảo sát, 7 phiếu hợp lệ): 3/7 đã dùng AI để hỗ trợ ("AI", "bộ harness với Claude, NotebookLM", "dùng AI làm summary"); còn lại không dùng gì hoặc nhờ người khác kiểm.
+- Công cụ đang được dùng (khảo sát, 20 phiếu hợp lệ): 11/20 đã dùng AI để hỗ trợ (soạn đáp án, tóm tắt, tìm thông tin; vd "Nhờ Chat GPT soạn", "dùng bộ harness với claude, notebooklm"); 5/20 không dùng gì; còn lại nhờ người khác kiểm hoặc làm theo kinh nghiệm.
 
 ## §1. Người dùng & bằng chứng *(guide 1.1, 1.2)*
 
@@ -21,17 +21,17 @@ Data BTC cấp đã dùng (nếu có — không commit nguyên file): data/precl
 - Việc họ cố làm xong: Có một bộ quiz trắc nghiệm và một bộ slide thuyết trình cho buổi học, đúng với tài liệu gốc của buổi, trước khi đưa lên trang pre-class.
 - Hôm nay họ giải bằng gì, hỏng ở đâu, vì sao chưa bỏ: Tự soạn, rồi tự mở tài liệu gốc so từng câu hỏi, từng đáp án, từng ý trên slide. Hỏng: tốn công tìm nguồn và kiểm đáp án; nội dung lỗi thời khó phát hiện; sửa video phải quay lại. Chưa bỏ vì đáp án và kiến thức phải đúng trước khi tới học viên.
 - Pain (KHÔNG chữ AI): Giảng viên phụ trách chuyên môn bài pre-class — phải soạn bộ câu hỏi trắc nghiệm và bài thuyết trình cho mỗi buổi rồi tự đối chiếu từng câu hỏi, đáp án và ý trình bày với tài liệu gốc — vướng ở chỗ tìm nguồn và kiểm đáp án làm thủ công trên bài 20–80 trang, còn sửa một chỗ trong video thì phải quay lại — mất từ 15 phút đến 2 tiếng mỗi bài chỉ riêng khâu kiểm, và đáp án sai hay số liệu lỗi thời vẫn có thể lọt tới 700+ học viên.
-- Bằng chứng — số chính + kết luận (khảo sát `team_docs/KhaoSat.xlsx`, n = 7 hợp lệ, **dưới ngưỡng 20 → chỉ là tham khảo**):
-  - Phần tốn công nhất (trích nguyên văn): "check đáp án và câu hỏi" (giảng viên) · "Tìm nguồn, tìm tài liệu gợi ý, tìm ảnh minh chứng mẫu" (người soạn) · "bài giảng có đang up to date" (biên tập) · "Đọc bài giảng và hệ thống nội dung" (biên tập).
-  - Cách kiểm: 5/7 dựa vào trí nhớ · 5/7 dựa vào nguồn ghi sẵn trong bài · 3/7 mở từng tài liệu ra so.
-  - Thời gian kiểm 1 bài: dưới 15 phút 2 · 15–30 phút 2 · 31–60 phút 1 · 1–2 tiếng 2. Duyệt ≥6 bài/tháng: 3/7.
-  - Mức phiền 2,1/5 · mức lo sót lỗi 2,4/5 → pain **chưa mạnh như giả thuyết**; cần phỏng vấn kiểm lại. Chi tiết: `evidence/summary.md`
+- Bằng chứng — số chính + kết luận (khảo sát, log ở `evidence/survey/results.csv`, **n = 20 hợp lệ / 23 phiếu, đạt ngưỡng 20**):
+  - Phần tốn công nhất (trích nguyên văn): "check đáp án và câu hỏi" (giảng viên) · "Tìm nguồn, tìm tài liệu gợi ý, tìm ảnh minh chứng mẫu" (người soạn) · "bài giảng có đang up to date" (biên tập) · "Đọc bài giảng và hệ thống nội dung" (biên tập) · "Phần soạn đáp án" (biên tập) · "làm từ đầu, kiểm tra thông tin" (người soạn).
+  - Cách kiểm: 14/20 dựa vào trí nhớ · 10/20 dựa vào nguồn ghi sẵn trong bài · 9/20 mở từng tài liệu ra so · 5/20 nhờ người khác kiểm lại.
+  - Thời gian kiểm 1 bài: dưới 15 phút 4 · 15–30 phút 7 · 31–60 phút 4 · 1–2 tiếng 2 · trên 2 tiếng 1 · không nhớ 2. Duyệt ≥6 bài/tháng: 5/20.
+  - Mức phiền 2,9/5 · mức lo sót lỗi 2,85/5 → pain **mức vừa, chưa mạnh**; cần phỏng vấn kiểm lại. Chi tiết: `evidence/summary.md`
 
 ## §2. Impact & quyết định chọn *(guide 1.3)*
 
 | Hướng | Bao nhiêu người gặp | Bao nhiêu lần / tháng | Mỗi lần tốn gì | Impact / tháng | Làm kịp không | Chọn? |
 |---|---|---|---|---|---|---|
-| **H1. Tạo quiz PDF + slide có giọng thuyết trình, 2 cổng duyệt đối chiếu nguồn** | ~5–8 GV + đội SX *(tự ước tính)*; khảo sát: 3/7 làm ≥6 bài/tháng | 4–8 bài/tháng/người *(tự ước tính)* | Soạn quiz + slide và kiểm: 15 phút–2 tiếng chỉ riêng khâu kiểm (khảo sát) | ~96 giờ-người/tháng *(tự ước tính, xem dưới)*; giảm rủi ro đáp án sai tới 700+ HV | ✅ nếu giữ 1 buổi / 1 chủ đề | ✅ |
+| **H1. Tạo quiz PDF + slide có giọng thuyết trình, 2 cổng duyệt đối chiếu nguồn** | ~5–8 GV + đội SX *(tự ước tính)*; khảo sát: 5/20 làm ≥6 bài/tháng | 4–8 bài/tháng/người *(tự ước tính)* | Soạn quiz + slide và kiểm: 15 phút–2 tiếng chỉ riêng khâu kiểm (khảo sát) | ~96 giờ-người/tháng *(tự ước tính, xem dưới)*; giảm rủi ro đáp án sai tới 700+ HV | ✅ nếu giữ 1 buổi / 1 chủ đề | ✅ |
 | H2. Chỉ kiểm duyệt kịch bản do người khác viết (hướng cũ) | như H1 | như H1 | 1–3 giờ tra cứu | Chỉ gỡ được khâu kiểm; khảo sát cho thấy khâu tìm nguồn và soạn câu hỏi cũng tốn công | ✅ | ❌ |
 | H3. Video bài giảng (quay hình / avatar) | Đội SX | 4–8 bài/tháng | Vài giờ quay + dựng; sửa 1 chỗ phải quay lại | Tốn nhất, sửa đắt nhất | ❌ | ❌ |
 | H4. Gom góp ý học viên thành bản sửa | 700 HV | Liên tục | 10–30 phút đọc | Khó đo "đúng" | ⚠️ | ❌ |
@@ -149,29 +149,37 @@ Data BTC cấp đã dùng (nếu có — không commit nguyên file): data/precl
 - Bộ câu thử theo chế độ: sinh quiz / slide (`[TAO_QUIZ]`, `[TAO_SLIDE]`) · cổng duyệt 1 (`[DUYET_KICH_BAN]`, `[DUYET_QUIZ]`) · cổng duyệt 2 (`[DUYET_CUOI]`) · từ chối.
 - **Chuẩn "đạt"** (chốt **trước 19:30 Thứ Sáu 27/11**, giữ nguyên đến 23:59 Thứ Bảy 28/11):
   > "Đạt khi ≥ 70% tổng câu qua, **và** 100% câu `tu_choi` qua, **và** `trich_dung_nguon` = 100% trên mọi câu hỏi / ý slide / nhãn có mã đoạn."
-- Kết quả: lượt 1 __/__ (__%) · lượt 2 __/__ (__%) — run ID: __ / __ → chi tiết `eval/report.md`, hồ sơ `eval/README.md`
+- Kết quả: lượt 1 20/25 (80%) · lượt 2 25/25 (100%) — run ID: `run-1@20261127-233321` / `run-4@20261128-001420` (còn 2 lượt trung gian: `run-2` 22/25 = 88% có 2 lỗi kỹ thuật, `run-3` 23/25 = 92%) → chi tiết `eval/report.md`, hồ sơ `eval/README.md`. Lượt 1 đạt vế 70% và `tu_choi` 100% nhưng chưa đạt vế `trich_dung_nguon` = 100% (B05 bịa khẳng định mang mã sai). Lưu ý: 4 lượt chạy lặp trên cùng bộ 25 câu nên 100% ở lượt 2 có thể lạc quan; chưa kiểm trên câu ngoài bộ.
 
 ## §8. Chi phí khi dùng thật *(guide 4.2)*
-- Persona + giá: `cost/personas.yaml` · lượt mô phỏng: `cost/simulate-__.csv` (__ phiên)
-- Chi phí / task thành công: __ (model __) · __ (model __) — nhớ cộng chi phí dịch vụ đọc (TTS) theo số ký tự lời thuyết trình
-- Chi phí / tháng ở quy mô thật: thấp __ · cơ sở __ · cao __ → chi tiết `cost/cost-estimate.md`
-- So với impact / người / tháng (§2): đáng làm không, vì sao:
+- Persona + giá: `cost/personas.yaml` (3 persona từ khảo sát n = 18, giá BTC xem 25/11/2026) · lượt mô phỏng: `cost/simulate-1.csv` (100 phiên chạy, **93 hợp lệ**; 7 phiên lỗi `HTTP 403 rate_limit_error` bị loại, không chạy lại)
+- Chi phí / task thành công (tỉ lệ đạt 100% của `run-4`, có thể lạc quan): **$0,0219** (Haiku 5.5 kiểm + Sonnet 5.5 sinh, mỗi model giá riêng) · $0,117 (nếu mọi token tính giá Sonnet 5.5). Giọng đọc dùng edge-tts, miễn phí nên không cộng chi phí TTS (không có cam kết dịch vụ).
+- Chi phí / tháng ở quy mô thật (Haiku + Sonnet): thấp 5 người **$0,64** · cơ sở 8 người **$1,02** · cao 20 người **$2,56** (~$0,128 / người / tháng) → chi tiết `cost/cost-estimate.md`. Chi thật qua proxy khi build cao hơn giá niêm yết ~6,5 lần ($17,41 / 502 request); nhân 6,5 thì cơ sở ~$6,6 / tháng.
+- So với impact / người / tháng (§2): ~12 giờ / người / tháng *(tự ước tính)* so với ~$0,13 chi phí model → đáng làm nếu impact ước tính đúng; chưa tính giờ công người duyệt, hosting.
 
 ## §9. Rủi ro & an toàn
-- Dữ liệu: đã ẩn danh gì, không thu gì, không đưa gì vào model gói miễn phí:
-- AI **không được** làm gì kể cả khi người dùng yêu cầu:
-- Ai có thể bị hại nếu AI sai, và nhóm chặn thế nào:
+- Dữ liệu: kho nguồn là đoạn do nhóm tự viết lại ngắn (`synthetic`), không chép nguyên tài liệu khoá. Khảo sát: bỏ cột liên hệ, chỉ lưu bản ẩn danh `evidence/survey/results.csv`. Không commit `.env` / key / data thô BTC; key chỉ nằm trong `.env`.
+- AI **không được** làm gì kể cả khi người dùng yêu cầu: tự xuất bản hay tự duyệt thay giảng viên (mọi đầu ra luôn ở trạng thái `cho_duyet`, API không có endpoint publish); trả lời / bịa nội dung không có đoạn nguồn (không có nguồn → `THIEU_NGUON`); nghe lệnh chèn trong tài liệu hay trong yêu cầu ("bỏ qua duyệt", "bỏ qua chỉ dẫn") — mã phát hiện mẫu chèn chỉ dẫn và từ chối (B23, B24).
+- Ai có thể bị hại nếu AI sai, và nhóm chặn thế nào: học viên bị dạy sai nếu đáp án sai hoặc số liệu lỗi thời lọt qua. Nhóm chặn bằng: mỗi câu / ý slide phải mang `segment_id` mà **code** kiểm có thật trong kho (không tin model), nhãn `SAI_NGUON` / `THIEU_NGUON` hiển thị cho giảng viên, hai cổng duyệt của người, và phần bị sửa ở cổng 2 được kiểm lại. **Còn rủi ro:** kiểm trên kho 14 đoạn, 25 câu, người chấm duy nhất là người viết code; chưa chạy trên tài liệu thật hay câu ngoài bộ.
 
 ## §10. Phân công & changelog
 - Phân công có tên (theo chặng, chia cặp — guide "Cách chia việc"): __
-- Dùng AI vào việc gì (2–3 dòng; chi tiết `docs/ai-usage.md`):
+- Dùng AI vào việc gì (2–3 dòng; chi tiết `docs/ai-usage.md`): Claude Code viết `codebase/` (`ai.py`, `tools.py`, `agent.py`, `api.py`), tự chấm cột `pass` của 4 lượt eval, soạn tài liệu số liệu; Codex viết `codebase/exporters.py` + `tests/test_exporters.py` (Claude đã review diff). Trong sản phẩm: Sonnet 5.5 sinh quiz / kịch bản, Haiku 5.5 phân loại và kiểm nhãn. UI do nhóm đưa prototype, chưa ghép.
 - Nhật ký thay đổi — **mọi thay đổi sau CP2 19:30 Thứ Sáu 27/11 phải có dòng ở đây**:
 
 **CP2 → CP4** (vd thu hẹp lát cắt, hỏi thêm người dùng, lần cải tiến trước lượt 2)
 
 | Thời điểm | Đổi gì | Vì sao (trỏ về câu thử / lỗi / bằng chứng nào) |
 |---|---|---|
-|  |  |  |
+| 27/11 23:30 | Viết bản chạy thử lần đầu (`codebase/`): workflow triage → sinh → kiểm, nối model thật | Chạy `run-1` |
+| 28/11 00:00 | Cải tiến 1 (`agent.py`): lấy mã đoạn hợp lệ đầu tiên thay vì hạ nhầm thành THIEU_NGUON; lọc khẳng định không có trong input; prompt "nói gọn ≠ sai", "mã ghi sẵn sai mà nội dung có nguồn khác → KHOP + cảnh báo" | Lượt 1: B05 (bịa khẳng định, kiểm quá khắt), B12–B15 (mã đoạn bị hạ nhầm) → `eval/run-1.csv` cột ghi_chu |
+| 28/11 00:10 | Sửa lỗi kỹ thuật (`ai.py`): tăng ngân sách token và gọi lại khi model hết token vì "suy nghĩ"; `tools.py`: tra nguồn ưu tiên tiêu đề khớp chủ đề + bỏ đoạn điểm thấp khi sinh | `run-2`: B02, B03 không có output (max_tokens), B04 trích D01-S01 ngoài tập mong đợi |
+| 28/11 00:25 | Sửa chuẩn hoá nhãn sai chính tả (KHOP_NGUAN → KHOP_NGUON); gộp một câu trắc nghiệm thành một khẳng định; phát hiện chèn chỉ dẫn bằng mẫu rõ ràng thay vì cờ model chập chờn | `run-3`: B18 (nhãn sai chính tả), B15 (một câu bị tách 4 khẳng định), B05 (cảnh báo chèn chỉ dẫn sai) |
+| 28/11 01:00 | Cập nhật số khảo sát: n = 7 → n = 18 hợp lệ / 22 phiếu (`evidence/survey/`); sửa dòng "data BTC đã dùng" (video_quiz chỉ 7 dòng nên không đào được) | Nhóm bổ sung phiếu; kiểm lại bằng `evidence/mine_preclass.py` |
+| 28/11 08:00 | Khảo sát: thêm phiếu 23 (vai "Trợ giảng cho giảng viên") từ `ThongKeKhaoSat.xlsx`; n = 19 → 20 hợp lệ / 23 phiếu; cập nhật số liệu ở §0, §1, §2, `evidence/summary.md`, `data/DATA_CARD.md` | Nhóm bổ sung phiếu; đạt ngưỡng 20. Không sửa câu trả lời nào |
+| 28/11 07:30 | Sửa `agent.py`: tra nguồn theo từng câu ở bước kiểm (`_gather_multi`), bỏ nhánh nhận khẳng định lạc đề, chuẩn hoá `y_chinh`; chạy `run-5` (24/25) và `run-6` (25/25), chi tiết `eval/report.md` | Lỗi cổng 2 phát hiện khi thử giao diện (câu sửa sai bị gắn THIEU_NGUON thay vì SAI_NGUON); B13 `run-5` trượt do phản hồi lạc đề của model |
+| 28/11 07:10 | Khảo sát: phiếu 20 được tính hợp lệ (n = 18 → 19 / 22 phiếu), cập nhật các số liên quan ở §0, §1, §2 và `evidence/summary.md`, `data/DATA_CARD.md` | Nhóm bổ sung vai "Giảng viên" (giảng viên hướng dẫn đồ án) vào file gốc cho phiếu trước đó thiếu vai; vẫn dưới ngưỡng 20. `cost/personas.yaml` và `simulate-1` giữ nguyên số n = 18 (không chạy lại) |
+| 28/11 01:26–03:20 | Chạy mô phỏng chi phí `simulate-1` (100 phiên, 93 hợp lệ), điền `cost/cost-estimate.md` và §8 | 7 phiên lỗi 403 rate limit (proxy trả 403 thay vì 429, `ai.py` không thử lại); nhóm chấp nhận 93 phiên; ghi chú chi thật qua proxy cao hơn giá niêm yết ~6,5 lần |
 
 **Sau CP4 (đến 23:59 Thứ Bảy 28/11)** (sửa theo góp ý — không sửa chuẩn "đạt", câu thử, số bằng chứng, kết quả các lượt đã chạy)
 

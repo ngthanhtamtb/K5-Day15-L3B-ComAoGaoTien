@@ -30,9 +30,12 @@ traces/simulate-try.jsonl
 traces/simulate-mock.jsonl
 traces/simulate-error.jsonl
 traces/simulate-stopped.jsonl
+# File xuất bản nháp (PDF, slide, mp3) do api.py sinh ra
+drafts/
 # Export khảo sát còn tên / email / SĐT: chỉ commit bản đã ẩn danh
 evidence/**/raw-*
 # Nguyên file data BTC cấp (data/preclass, data/training-ops… của repo đề): để ở đây, không commit
 data-btc
 data-btc/
 team_docs/
+.playwright-mcp/

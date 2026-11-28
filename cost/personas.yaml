@@ -1,51 +1,49 @@
-# Mô phỏng chi phí khi dùng thật — điền ở guide bước 4.2.
-# Ôn lại: ngày 13, ngày 1, ngày 14 · lab ngày 13, lab ngày 14.
-# Mọi số phải có nguồn (data / phỏng vấn / khảo sát / quy mô khoá có nguồn) hoặc ghi rõ "(tự ước tính)".
-# Chạy: python run.py simulate --try   (10 phiên, kiểm khung — làm trước CP3)
+# Mô phỏng chi phí khi dùng thật.
+# Mọi số có nguồn (khảo sát n = 18 hợp lệ ở evidence/survey/results.csv; bảng giá BTC further-reading/model-prices.md) hoặc ghi rõ "(tự ước tính)".
+# Chạy: python run.py simulate --try   (10 phiên, kiểm khung)
 #       python run.py simulate         (đủ số phiên dưới đây — bản nộp CP4)
-# Thay mọi dòng "(ví dụ)" bằng số và nguồn của nhóm; simulate nhắc nếu còn sót.
 
-sessions: 50        # số phiên mô phỏng — bản nộp ≥50
+sessions: 100       # số phiên mô phỏng (gấp đôi mức tối thiểu 50)
 seed: 42            # giữ cố định để chạy lại ra cùng chuỗi phiên
 
-users:              # số người dùng thật nếu đưa vào dùng — 3 kịch bản, ở quy mô thật của sản phẩm
-                    # track A: khoá học · track B–F: người dùng của sản phẩm / nhóm nhắm tới, nguồn công khai có link
-  low: 300
-  base: 700
-  high: 1000
-  source: "(ví dụ) track A — thay bằng số của nhóm. Cơ sở: lớp L3 hơn 700 học viên (README hackathon); thấp, cao: (tự ước tính)"
+users:              # số người dùng thật nếu đưa vào dùng — 3 kịch bản
+                    # Người dùng của sản phẩm = người làm bài giảng (giảng viên, người soạn, biên tập), KHÔNG phải 700+ học viên.
+  low: 5
+  base: 8
+  high: 20
+  source: "Cơ sở 8: spec.md §2 'khoảng 5–8 giảng viên + đội sản xuất' (tự ước tính, chưa có số đếm thật). Thấp 5: cận dưới của khoảng đó. Cao 20: mở rộng sang nhiều bộ môn / đội sản xuất (tự ước tính)."
 
-personas:           # ≥3 kiểu người dùng; share cộng lại = 1
+personas:           # share cộng lại = 1; tỉ lệ share và số lần dùng lấy từ câu 2 khảo sát (số bài kiểm / duyệt tháng vừa rồi, n = 18)
   - name: dung_it
-    share: 0.5              # tỉ lệ người dùng kiểu này
-    uses_per_month: 4       # số phiên / người / tháng
-    turns_per_session: 1    # số lượt hỏi trong một phiên
-    source: "(ví dụ) phỏng vấn P1, P3 — thay bằng nguồn của nhóm"
+    share: 0.33             # 6/18 phiếu kiểm 1–2 bài / tháng
+    uses_per_month: 2       # trung điểm 1–2 bài, làm tròn lên
+    turns_per_session: 2    # (tự ước tính) 1 lượt tạo quiz / slide + 1 lượt duyệt
+    source: "Khảo sát câu 2: 6/18 phiếu hợp lệ kiểm 1–2 bài / tháng; số lượt mỗi phiên (tự ước tính)"
   - name: dung_vua
-    share: 0.3
-    uses_per_month: 10
-    turns_per_session: 3
-    source: "(ví dụ) khảo sát n = 24, câu 3"
+    share: 0.39             # 7/18 phiếu kiểm 3–5 bài / tháng
+    uses_per_month: 4       # trung điểm 3–5 bài
+    turns_per_session: 3    # (tự ước tính) tạo quiz, tạo slide, duyệt
+    source: "Khảo sát câu 2: 7/18 phiếu hợp lệ kiểm 3–5 bài / tháng; số lượt mỗi phiên (tự ước tính)"
   - name: dung_nhieu
-    share: 0.2
-    uses_per_month: 20
-    turns_per_session: 5
-    source: "(ví dụ) data/preclass: đếm số lượt / người — cách đếm ở evidence/data-mining.md"
+    share: 0.28             # 5/18 phiếu kiểm từ 6 bài / tháng trở lên
+    uses_per_month: 8       # (tự ước tính) khảo sát chỉ cho 'từ 6 trở lên'
+    turns_per_session: 4    # (tự ước tính) tạo, kiểm lại phần sửa ở cổng 2
+    source: "Khảo sát câu 2: 5/18 phiếu hợp lệ kiểm ≥6 bài / tháng; 8 bài và số lượt mỗi phiên (tự ước tính)"
 # Mỗi lượt hỏi lấy ngẫu nhiên một đầu vào trong eval/benchmark.csv (type thuong và kho).
-# Persona hỏi kiểu riêng: thêm vào persona đó
-#     types: [thuong, kho, tu_choi]
-# hoặc
-#     inputs: ["câu hỏi kiểu 1", "câu hỏi kiểu 2"]
 
-prices:             # USD / 1 triệu token — chép từ further-reading/model-prices.md của repo đề. ≥2 mức model
-  - model: gemini-3.1-flash-lite
-    input: 0.25
-    output: 1.50
-    source: "(ví dụ) https://ai.google.dev/gemini-api/docs/pricing · xem 25/11/2026"
-  - model: gemini-4-hydrogen
-    input: 1.50
-    output: 7.50
-    source: "(ví dụ) https://ai.google.dev/gemini-api/docs/pricing · xem 25/11/2026"
+prices:             # USD / 1 triệu token — chép từ further-reading/model-prices.md của repo đề (BTC xem 25/11/2026)
+  - model: claude-haiku-5-5
+    input: 0.10
+    output: 0.50
+    source: "https://platform.claude.com/docs/en/about-claude/pricing · Claude Haiku 5.5, giá cho prompt ≤100.000 token · xem 25/11/2026 (bảng BTC)"
+  - model: claude-sonnet-5-5
+    input: 2.00
+    output: 10.00
+    source: "https://platform.claude.com/docs/en/about-claude/pricing · Claude Sonnet 5.5 · xem 25/11/2026 (bảng BTC)"
+  - model: claude-opus-5-5
+    input: 4.00
+    output: 20.00
+    source: "https://platform.claude.com/docs/en/about-claude/pricing · Claude Opus 5.5 · xem 25/11/2026 (bảng BTC)"
 
 usd_to_vnd:         # tuỳ chọn: điền thì bản tóm tắt in thêm tiền Việt
   rate:
