@@ -108,18 +108,16 @@ class SlideOptions(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             return Path(exporters.render_slides(self.SL, d, "x", None, options)).read_text(encoding="utf-8")
 
-    def test_default_unchanged(self):
+    def test_default_theme_and_notes(self):
         html = self.render()
         self.assertIn("LOI-NOI", html)
-        self.assertNotIn("aspect-ratio", html)
+        self.assertIn("--accent:#0E9F9A", html)
 
     def test_options_applied(self):
-        html = self.render({"mau": "Tối giản", "ty_le": "4:3", "ghi_chu": False})
+        html = self.render({"mau": "Tối giản", "ghi_chu": False})
         self.assertNotIn("LOI-NOI", html)
-        self.assertIn("aspect-ratio:4/3", html)
-        self.assertIn("border-radius:0", html)
-        self.assertIn("aspect-ratio:16/9", self.render({"ty_le": "16:9"}))
-        self.assertNotIn("aspect-ratio", self.render({"ty_le": "9:99"}))      # giá trị lạ bị bỏ qua
+        self.assertIn("--accent:#2563EB", html)
+        self.assertIn("--accent:#0E9F9A", self.render({"mau": "không có"}))      # bảng màu lạ → mặc định
 
 
 class Signature(unittest.TestCase):

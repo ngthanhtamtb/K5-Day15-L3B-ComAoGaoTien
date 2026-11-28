@@ -6,7 +6,12 @@ from html import escape
 import os
 from pathlib import Path
 import re
-from urllib.parse import quote
+import time
+
+try:
+    from . import deck
+except ImportError:          # chạy với codebase/ nằm trong sys.path (API, run.py)
+    import deck
 
 
 ALLOWED_VOICES = {"vi-VN-HoaiMyNeural", "vi-VN-NamMinhNeural"}
@@ -15,7 +20,8 @@ ALLOWED_RATES = {"-20%", "-15%", "-10%", "+0%", "+10%", "+15%", "+20%", "+25%"}
 
 def _clean_tts_text(text: str) -> str:
     """Làm sạch mã đoạn trích dẫn [D01-S02] hoặc ký hiệu thừa trước khi đọc thành tiếng."""
-    cleaned = re.sub(r"\[\s*(?:nguồn\s*:\s*)?D\d{2}-[SQ]\d{2}[^\]]*\]", "", text)
+    cleaned = re.sub(r"\[\s*(?:nguồn\s*:\s*)?D\d{2}-[SQ]\d{2,3}[^\]]*\]", "", text)
+    cleaned = re.sub(r"[*_`#>]+", "", cleaned)
     cleaned = re.sub(r"[ \t]+", " ", cleaned).strip()
     return cleaned or text.strip()
 
@@ -43,241 +49,64 @@ def export_quiz_pdf(quiz: list[dict], out_dir: str, title: str = "Quiz") -> dict
     regular, bold = _find_fonts()
     directory = Path(out_dir)
     directory.mkdir(parents=True, exist_ok=True)
+    NAVY, TEAL, INK, MUTED, LINE = (18, 53, 91), (14, 159, 154), (20, 30, 50), (90, 104, 124), (213, 221, 234)
 
-    def document():
+    def document(heading, sub):
         pdf = FPDF()
         pdf.add_font("Unicode", fname=str(regular))
         pdf.add_font("Unicode", style="B", fname=str(bold))
-        pdf.set_auto_page_break(auto=True, margin=15)
+        pdf.set_auto_page_break(auto=True, margin=16)
+        pdf.set_margins(18, 16, 18)
         pdf.add_page()
+        pdf.set_fill_color(*NAVY)
+        pdf.rect(0, 0, 210, 34, "F")
+        pdf.set_fill_color(*TEAL)
+        pdf.rect(0, 34, 210, 2.2, "F")
+        pdf.set_xy(18, 9)
+        pdf.set_text_color(255, 255, 255)
+        pdf.set_font("Unicode", style="B", size=17)
+        pdf.multi_cell(174, 8, text=str(heading), new_x="LMARGIN", new_y="NEXT")
+        pdf.set_x(18)
+        pdf.set_font("Unicode", size=10)
+        pdf.set_text_color(210, 225, 245)
+        pdf.cell(174, 6, text=sub, new_x="LMARGIN", new_y="NEXT")
+        pdf.set_y(44)
+        pdf.set_text_color(*INK)
         return pdf
 
-    def paragraph(pdf, text, heading=False):
-        pdf.set_font("Unicode", style="B" if heading else "", size=14 if heading else 11)
-        pdf.multi_cell(0, 7, text=str(text), new_x="LMARGIN", new_y="NEXT")
+    def paragraph(pdf, text, heading=False, indent=0.0, color=INK, size=None):
+        pdf.set_x(18 + indent)
+        pdf.set_text_color(*color)
+        pdf.set_font("Unicode", style="B" if heading else "", size=size or (12 if heading else 11))
+        pdf.multi_cell(174 - indent, 6.4, text=str(text), new_x="LMARGIN", new_y="NEXT")
 
-    exam, answers = document(), document()
-    paragraph(exam, title, True)
-    paragraph(answers, f"{title} — Đáp án", True)
+    def rule(pdf):
+        pdf.set_draw_color(*LINE)
+        pdf.line(18, pdf.get_y() + 1.5, 192, pdf.get_y() + 1.5)
+        pdf.ln(5)
+
+    exam = document(title, "Họ và tên: ................................   Lớp: ..........   Ngày: ..../..../........")
+    answers = document(f"{title} — Đáp án", "Đáp án, giải thích và đoạn nguồn trích dẫn cho từng câu")
     for number, question in enumerate(quiz, 1):
         paragraph(exam, f"Câu {number}. {question['de']}", True)
+        exam.ln(1)
         for letter in "ABCD":
-            paragraph(exam, f"{letter}. {question[letter]}")
-        exam.ln(3)
-        paragraph(answers, f"Câu {number}. Đáp án: {question['dap_an']}", True)
-        paragraph(answers, f"Giải thích: {question['giai_thich']}")
-        paragraph(answers, f"Nguồn: {question['segment_id']}")
-        answers.ln(3)
+            paragraph(exam, f"{letter}. {question[letter]}", indent=6)
+        rule(exam)
+        paragraph(answers, f"Câu {number}. Đáp án: {question['dap_an']}", True, color=NAVY)
+        paragraph(answers, f"Giải thích: {question['giai_thich']}", indent=4)
+        paragraph(answers, f"Nguồn: {question['segment_id']}", indent=4, color=MUTED, size=9.5)
+        rule(answers)
     paths = {"exam_pdf": str(directory / "quiz_exam.pdf"), "answer_pdf": str(directory / "quiz_answers.pdf")}
     exam.output(paths["exam_pdf"])
     answers.output(paths["answer_pdf"])
     return paths
 
 
-def _slide_illustration_svg(slide: dict, minimal: bool) -> str:
-    """Tạo hình minh hoạ SVG sạch sẽ theo chủ đề slide (không lặp text để giữ nguyên kiểm đếm test)."""
-    blob = ("%s %s" % (slide.get("tieu_de", ""), " ".join(slide.get("y_chinh", [])))).lower()
-    accent = "#0F172A" if minimal else "#1E3A5F"
-    soft = "#F1F5F9" if minimal else "#EFF6FF"
-    border = "#CBD5E1" if minimal else "#BFDBFE"
-    if any(k in blob for k in ("rag", "truy xuất", "embedding", "vector", "kho")):
-        inner = (
-            f'<rect x="18" y="34" width="66" height="92" rx="8" fill="{soft}" stroke="{accent}" stroke-width="2"/>'
-            f'<line x1="30" y1="56" x2="72" y2="56" stroke="{accent}" stroke-width="3" stroke-linecap="round"/>'
-            f'<line x1="30" y1="74" x2="66" y2="74" stroke="{accent}" stroke-width="3" stroke-linecap="round"/>'
-            f'<line x1="30" y1="92" x2="70" y2="92" stroke="{accent}" stroke-width="3" stroke-linecap="round"/>'
-            f'<path d="M92 80 H126" stroke="{accent}" stroke-width="3" stroke-linecap="round"/>'
-            f'<polygon points="124,73 136,80 124,87" fill="{accent}"/>'
-            f'<rect x="142" y="46" width="70" height="68" rx="12" fill="{soft}" stroke="{accent}" stroke-width="2"/>'
-            f'<circle cx="177" cy="80" r="16" fill="{accent}" opacity="0.18"/>'
-            f'<circle cx="177" cy="80" r="7" fill="{accent}"/>'
-        )
-    elif any(k in blob for k in ("prompt", "few-shot", "chain", "cot", "suy luận")):
-        inner = (
-            f'<circle cx="42" cy="80" r="18" fill="{soft}" stroke="{accent}" stroke-width="2"/>'
-            f'<path d="M64 80 H92" stroke="{accent}" stroke-width="3" stroke-linecap="round"/>'
-            f'<circle cx="115" cy="80" r="18" fill="{soft}" stroke="{accent}" stroke-width="2"/>'
-            f'<path d="M137 80 H165" stroke="{accent}" stroke-width="3" stroke-linecap="round"/>'
-            f'<rect x="170" y="56" width="44" height="48" rx="10" fill="{accent}" opacity="0.18" stroke="{accent}" stroke-width="2"/>'
-            f'<path d="M182 80 L190 88 L204 72" fill="none" stroke="{accent}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>'
-        )
-    elif any(k in blob for k in ("token", "llm", "temperature", "ngữ cảnh", "context", "hồi quy")):
-        inner = (
-            f'<rect x="20" y="42" width="48" height="32" rx="6" fill="{soft}" stroke="{accent}" stroke-width="2"/>'
-            f'<rect x="82" y="42" width="48" height="32" rx="6" fill="{soft}" stroke="{accent}" stroke-width="2"/>'
-            f'<rect x="144" y="42" width="66" height="32" rx="6" fill="{accent}" opacity="0.18" stroke="{accent}" stroke-width="2"/>'
-            f'<path d="M44 96 C74 122, 138 122, 176 94" fill="none" stroke="{accent}" stroke-width="2.5" stroke-dasharray="5 4"/>'
-            f'<circle cx="177" cy="92" r="5" fill="{accent}"/>'
-        )
-    else:
-        inner = (
-            f'<rect x="26" y="34" width="178" height="92" rx="12" fill="{soft}" stroke="{accent}" stroke-width="2"/>'
-            f'<circle cx="62" cy="70" r="14" fill="{accent}" opacity="0.22"/>'
-            f'<path d="M56 70 L60 75 L70 64" fill="none" stroke="{accent}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>'
-            f'<line x1="90" y1="62" x2="182" y2="62" stroke="{accent}" stroke-width="4" stroke-linecap="round"/>'
-            f'<line x1="90" y1="80" x2="164" y2="80" stroke="{accent}" stroke-width="3" stroke-linecap="round" opacity="0.65"/>'
-            f'<line x1="48" y1="104" x2="182" y2="104" stroke="{accent}" stroke-width="2.5" stroke-linecap="round" opacity="0.35"/>'
-        )
-    return (
-        f'<div class="slide-visual" aria-hidden="true">'
-        f'<svg viewBox="0 0 230 160" width="100%" height="160" xmlns="http://www.w3.org/2000/svg">'
-        f'<rect x="2" y="2" width="226" height="156" rx="14" fill="#ffffff" stroke="{border}" stroke-width="1.5"/>'
-        f'{inner}</svg></div>'
-    )
-
-
-def _sanitize_svg(raw: str) -> str:
-    """Chỉ giữ cặp thẻ <svg>...</svg> và loại bỏ script/event handler để chống XSS."""
-    m = re.search(r"<svg\b[^>]*>.*?</svg>", raw or "", flags=re.I | re.S)
-    if not m:
-        return ""
-    svg = m.group(0)
-    svg = re.sub(r"<script\b[^>]*>.*?</script>", "", svg, flags=re.I | re.S)
-    svg = re.sub(r"\son[a-z]+\s*=\s*(['\"]).*?\1", "", svg, flags=re.I | re.S)
-    svg = re.sub(r"javascript:", "", svg, flags=re.I)
-    return '<div class="slide-visual" aria-hidden="true">' + svg + "</div>"
-
-
 def render_slides(slides: list[dict], out_dir: str, title: str = "Slide", audio: dict | None = None,
                   options: dict | None = None) -> str:
-    """Write an escaped HTML deck; audio files remain relative external assets.
-
-    options (tuỳ chọn, giá trị lạ bị bỏ qua): mau "AI20K chuẩn" | "Tối giản", ty_le "16:9" | "4:3",
-    ghi_chu bool (hiện lời thuyết trình dưới mỗi slide, mặc định True). Không truyền → hành vi cũ."""
-    options = options or {}
-    minimal = options.get("mau") == "Tối giản"
-    ratio = {"16:9": "16/9", "4:3": "4/3"}.get(options.get("ty_le"))
-    show_notes = options.get("ghi_chu", True) is not False
-    extra_css = (("body{background:#fff}section{border:1px solid #ccc;border-radius:0;padding:1.2rem;box-shadow:none}"
-                  ".slide-badge{background:#f1f5f9;color:#334155}" if minimal else "")
-                 + (f"section{{aspect-ratio:{ratio};overflow:auto}}" if ratio else ""))
-    directory = Path(out_dir)
-    directory.mkdir(parents=True, exist_ok=True)
-    safe = lambda value: escape(str(value), quote=True)
-    total = len(slides)
-    sections = []
-    for index, slide in enumerate(slides, 1):
-        player = ""
-        if audio and index in audio:
-            relative = os.path.relpath(Path(audio[index]).resolve(), directory.resolve())
-            source = quote(Path(relative).as_posix(), safe="/.")
-            player = f'<audio controls preload="none" src="{safe(source)}"></audio>'
-        points = "".join(f"<li>{safe(point)}</li>" for point in slide["y_chinh"])
-        hidden = "" if index == 1 else " hidden"
-        vis = slide.get("visual") if isinstance(slide.get("visual"), dict) else {}
-        layout = vis.get("layout") if vis.get("layout") in ("split-diagram", "cards", "timeline", "comparison") else "split-diagram"
-        custom_svg = _sanitize_svg(vis.get("svg", "")) if vis.get("svg") else ""
-        illust = custom_svg or _slide_illustration_svg(slide, minimal)
-        sections.append(
-            f'<section data-layout="{layout}" class="slide"{hidden}>'
-            f'<div class="slide-top"><span class="slide-num">Slide {index} / {total}</span>'
-            f'<span class="slide-badge">Nguồn: {safe(slide["segment_id"])}</span></div>'
-            f'<div class="slide-bar"></div>'
-            f'<div class="slide-grid"><div class="slide-main">'
-            f'<h2>{safe(slide["tieu_de"])}</h2><ul>{points}</ul></div>'
-            f'{illust}</div>'
-            + (f'<details><summary>Lời thuyết trình</summary><p>{safe(slide["loi_thuyet_trinh"])}</p></details>'
-               if show_notes else "")
-            + f'{player}</section>'
-        )
-    content = """<!doctype html><html lang="vi"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>""" + safe(title) + """</title><style>
-body{font-family:'Fira Sans','Segoe UI',Arial,sans-serif;max-width:980px;margin:2rem auto;padding:0 1.2rem;background:#F8FAFC;color:#0F172A}
-h1{font-size:1.35rem;color:#0F172A;margin-bottom:1rem;border-left:4px solid #1E3A5F;padding-left:.75rem}
-section{background:#fff;padding:2.2rem 2.5rem;border-radius:14px;box-shadow:0 4px 18px rgba(15,23,42,.06);border:1px solid #CBD5E1}
-.slide-top{display:flex;justify-content:space-between;align-items:center;gap:.5rem;margin-bottom:.75rem;font-size:.85rem}
-.slide-num{color:#475569;font-weight:600;font-family:'Fira Code',ui-monospace,monospace}
-.slide-badge{background:#1E3A5F;color:#fff;padding:.2rem .65rem;border-radius:6px;font-weight:600;font-family:'Fira Code',ui-monospace,monospace;font-size:.8rem}
-.slide-bar{width:56px;height:6px;border-radius:3px;background:#1E3A5F;margin-bottom:.9rem}
-.slide-grid{display:grid;grid-template-columns:1.45fr 1fr;gap:1.5rem;align-items:center}
-section[data-layout="cards"] ul,section[data-layout="comparison"] ul{list-style:none;padding:0;display:grid;gap:.65rem}
-section[data-layout="cards"] li,section[data-layout="comparison"] li{margin:0;background:#F8FAFC;border:1px solid #E4E7EB;border-left:4px solid #1E3A5F;border-radius:10px;padding:.7rem .9rem}
-section[data-layout="comparison"] ul{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
-section[data-layout="timeline"] ul{list-style:none;padding-left:1.35rem;border-left:3px solid #BFDBFE}
-section[data-layout="timeline"] li{position:relative;margin:.85rem 0;padding-left:.35rem}
-section[data-layout="timeline"] li::before{content:"";position:absolute;left:-1.85rem;top:.45rem;width:11px;height:11px;border-radius:50%;background:#1E3A5F;border:2px solid #fff;box-shadow:0 0 0 2px #BFDBFE}
-.slide-visual svg{width:100%;height:auto;max-height:240px;display:block;border-radius:12px}
-@media (max-width:720px){.slide-grid{grid-template-columns:1fr}}
-h2{margin:0 0 .85rem;font-size:1.65rem;color:#0F172A;line-height:1.25}
-ul{padding-left:1.25rem;margin:0}li{margin:.75rem 0;line-height:1.5;font-size:1.05rem}
-p,li,h1,h2{white-space:pre-wrap;overflow-wrap:anywhere}
-details{margin-top:1.25rem;background:#F8FAFC;border:1px solid #E4E7EB;border-radius:10px;padding:.7rem 1rem}
-summary{cursor:pointer;font-weight:600;color:#334155}
-nav{display:flex;align-items:center;justify-content:center;gap:.75rem;margin-top:1rem;flex-wrap:wrap}
-button{padding:.6rem 1.15rem;border-radius:8px;border:1px solid #CBD5E1;background:#fff;color:#0F172A;font-weight:600;cursor:pointer;font-family:inherit}
-button:hover:not(:disabled){background:#1E3A5F;color:#fff;border-color:#1E3A5F}
-button.primary{background:#1E3A5F;color:#fff;border-color:#1E3A5F}
-button:disabled{opacity:.45;cursor:not-allowed}
-audio{display:block;margin-top:1rem;width:100%}[hidden]{display:none}
-html:fullscreen body{max-width:none;width:100vw;height:100vh;margin:0;padding:1.5vh 3vw;box-sizing:border-box;display:flex;flex-direction:column;gap:1vh}
-html:fullscreen h1{margin:0;font-size:1.15rem}
-html:fullscreen section.slide{flex:1;display:flex;flex-direction:column;justify-content:center;padding:3vh 4vw;overflow:auto}
-html:fullscreen section.slide[hidden]{display:none}
-html:fullscreen h2{font-size:clamp(1.8rem,2.8vw,2.7rem);margin-bottom:1.2rem}
-html:fullscreen li{font-size:clamp(1.15rem,1.65vw,1.5rem);margin:1rem 0}
-html:fullscreen .slide-grid{gap:2.5vw}
-html:fullscreen .slide-visual svg{max-height:46vh}
-html:fullscreen nav{margin:0}
-""" + extra_css + """
-</style></head><body><h1>""" + safe(title) + "</h1>" + "".join(sections) + """
-<nav aria-label="Điều hướng"><button id="previous" type="button">← Trước</button>
-<span id="position" aria-live="polite"></span><button id="next" type="button">Sau →</button>
-<button id="autoplay" class="primary" type="button">▶ Thuyết trình tự động</button>
-<button id="fullscreen" type="button">⛶ Toàn màn hình</button></nav>
-<script>
-const slides = Array.from(document.querySelectorAll('.slide'));
-let current = 0, autoNarrate = false;
-const autoBtn = document.getElementById('autoplay');
-function syncAutoBtn() {
-  autoBtn.textContent = autoNarrate ? '⏸ Dừng thuyết trình' : '▶ Thuyết trình tự động';
-}
-function show(index, playVoice) {
-  current = Math.max(0, Math.min(index, slides.length - 1));
-  slides.forEach((slide, i) => {
-    slide.hidden = i !== current;
-    if (slide.hidden) slide.querySelectorAll('audio').forEach(a => { a.pause(); a.currentTime = 0; });
-  });
-  document.getElementById('position').textContent = slides.length ? `${current + 1} / ${slides.length}` : '0 / 0';
-  document.getElementById('previous').disabled = !slides.length || current === 0;
-  document.getElementById('next').disabled = !slides.length || current === slides.length - 1;
-  if (playVoice && slides[current]) {
-    const a = slides[current].querySelector('audio');
-    if (a) a.play().catch(() => { autoNarrate = false; syncAutoBtn(); });
-  }
-}
-slides.forEach((slide, idx) => {
-  const a = slide.querySelector('audio');
-  if (a) a.addEventListener('ended', () => {
-    if (!autoNarrate) return;
-    if (idx < slides.length - 1) show(idx + 1, true);
-    else { autoNarrate = false; syncAutoBtn(); }
-  });
-});
-document.getElementById('previous').addEventListener('click', () => { autoNarrate = false; syncAutoBtn(); show(current - 1, false); });
-document.getElementById('next').addEventListener('click', () => { autoNarrate = false; syncAutoBtn(); show(current + 1, false); });
-autoBtn.addEventListener('click', () => {
-  if (!slides.length) return;
-  autoNarrate = !autoNarrate; syncAutoBtn();
-  const a = slides[current].querySelector('audio');
-  if (autoNarrate) { if (a) a.play().catch(() => {}); }
-  else if (a) a.pause();
-});
-document.getElementById('fullscreen').addEventListener('click', () => {
-  if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
-  else document.exitFullscreen?.();
-});
-document.addEventListener('keydown', event => {
-  if (event.target.closest('audio, input, textarea, select, [contenteditable]')) return;
-  if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-    event.preventDefault(); autoNarrate = false; syncAutoBtn(); show(current + (event.key === 'ArrowRight' ? 1 : -1), false);
-  }
-});
-show(0, false);
-</script></body></html>"""
-    path = directory / "slides.html"
-    path.write_text(content, encoding="utf-8")
-    return str(path)
+    """Ghi bộ slide HTML (xem deck.py). options: mau, image_dir, nguon, phu_de, meta. Giá trị lạ bị bỏ qua."""
+    return deck.render_deck(slides, out_dir, title, audio, options)
 
 
 def synthesize_voice(slide_id: int, text: str, out_dir: str, voice: str = "vi-VN-HoaiMyNeural",
@@ -303,7 +132,17 @@ def synthesize_voice(slide_id: int, text: str, out_dir: str, voice: str = "vi-VN
         await comm.save(str(path))
 
     def run():
-        asyncio.run(generate())
+        last = None
+        for attempt in range(4):          # edge-tts thỉnh thoảng trả "No audio was received": thử lại với độ trễ tăng dần
+            try:
+                asyncio.run(generate())
+                if path.is_file() and path.stat().st_size > 0:
+                    return
+                last = RuntimeError("file MP3 rỗng")
+            except Exception as exc:
+                last = exc
+            time.sleep(1.2 * (attempt + 1))
+        raise last
 
     try:
         try:

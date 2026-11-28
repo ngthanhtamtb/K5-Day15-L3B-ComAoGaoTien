@@ -81,10 +81,9 @@ class IngestTests(unittest.TestCase):
             with self.subTest(name=name), self.assertRaisesRegex(ValueError, "định dạng không hỗ trợ:"):
                 extract_text(name, b"text")
 
-    def test_size_limit(self):
-        with self.assertRaisesRegex(ValueError, "^tài liệu quá lớn$"):
-            extract_text("a.txt", b"x" * (5 * 1024 * 1024 + 1))
-        self.assertEqual(len(extract_text("a.txt", b"x" * (5 * 1024 * 1024))), 5 * 1024 * 1024)
+    def test_no_size_limit(self):
+        big = 6 * 1024 * 1024
+        self.assertEqual(len(extract_text("a.txt", b"x" * big)), big)
 
     def test_empty_and_invalid_documents(self):
         for filename, data in (("a.txt", b""), ("a.md", b" \n\t"),
@@ -124,10 +123,10 @@ class IngestTests(unittest.TestCase):
         text = "nội dung " * 40
         self.assertEqual(" ".join(split_segments(text, 30, 15)), " ".join(text.split()))
 
-    def test_segment_count_limit(self):
-        self.assertEqual(len(split_segments("abc\n" * 200, 3, 3)), 200)
-        with self.assertRaisesRegex(ValueError, "200 đoạn"):
-            split_segments("abc\n" * 201, 3, 3)
+    def test_no_segment_count_limit(self):
+        self.assertEqual(len(split_segments("abc\n" * 500, 3, 3)), 500)
+        ids = [x["segment_id"] for x in build_segments("T", ("x" * 300 + "\n") * 150, 10, "2026-01-01")]
+        self.assertEqual((ids[0], ids[98], ids[99]), ("D10-S01", "D10-S99", "D10-S100"))
 
     def test_invalid_lengths(self):
         for maximum, minimum in ((0, 1), (3, 4), (3, 0), (3.5, 1), (True, 1)):
@@ -157,3 +156,32 @@ class IngestTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ImageTests(unittest.TestCase):
+    def test_docx_image_extracted_and_attached(self):
+        from PIL import Image
+        from codebase.ingest import attach_images, extract_images
+        png = BytesIO()
+        Image.new("RGB", (400, 300), (10, 120, 200)).save(png, "PNG")
+        ns = ('xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+              'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '
+              'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"')
+        doc = ('<w:document %s><w:body><w:p><w:r><w:t>Embedding vector cosine similarity</w:t></w:r></w:p>'
+               '<w:p><w:r><a:blip r:embed="rId1"/></w:r></w:p></w:body></w:document>' % ns)
+        rels = ('<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                '<Relationship Id="rId1" Target="media/image1.png"/></Relationships>')
+        stream = BytesIO()
+        with ZipFile(stream, "w") as z:
+            z.writestr("word/document.xml", doc)
+            z.writestr("word/_rels/document.xml.rels", rels)
+            z.writestr("word/media/image1.png", png.getvalue())
+        images = extract_images("a.docx", stream.getvalue())
+        self.assertEqual(len(images), 1)
+        self.assertEqual(images[0]["ext"], "jpg")
+        segs = [{"full_text": "Kho dữ liệu khác hoàn toàn"}, {"full_text": "Embedding vector cosine similarity đo độ gần"}]
+        self.assertIs(attach_images(segs, images)[0][0], segs[1])
+
+    def test_tiny_and_broken_images_are_skipped(self):
+        from codebase.ingest import extract_images
+        self.assertEqual(extract_images("a.docx", b"not a zip"), [])

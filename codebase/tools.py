@@ -20,6 +20,7 @@ SEGMENTS_PATH = os.path.join(ROOT, "data", "sources", "segments.json")
 # Tài liệu người dùng nạp (buổi ≥ 10) nằm riêng, KHÔNG commit (data/uploads/ trong .gitignore). Bộ câu thử
 # `eval` luôn chạy trên kho gốc 14 đoạn: đặt A3_NO_UPLOADS=1 (run_eval không cần sửa) để bỏ qua tài liệu nạp.
 UPLOADS_PATH = os.path.join(ROOT, "data", "uploads", "segments.json")
+IMAGES_DIR = os.path.join(ROOT, "data", "uploads", "images")   # ảnh trích từ tài liệu nạp (không commit)
 MAX_RESULTS = 5
 SNIPPET_LEN = 220
 
@@ -99,6 +100,12 @@ def remove_upload(buoi):
     key = "%02d" % int(buoi)
     cur = _read_uploads()
     keep = [s for s in cur if s["segment_id"][1:3] != key]
+    for s in cur:
+        if s["segment_id"][1:3] == key:
+            for name in s.get("images") or []:
+                path = os.path.join(IMAGES_DIR, os.path.basename(name))
+                if os.path.isfile(path):
+                    os.remove(path)
     if len(keep) != len(cur):
         _write_uploads(keep)
     return len(cur) - len(keep)
@@ -146,6 +153,20 @@ def get_segment(segment_id: str) -> dict:
         if seg["segment_id"] == segment_id:
             return {k: seg[k] for k in ("segment_id", "full_text", "source_title", "updated_date")}
     raise KeyError("không có đoạn nguồn: %s" % segment_id)
+
+
+def get_segment_images(segment_id):
+    """Tên file ảnh (trong IMAGES_DIR) gắn với đoạn nguồn; rỗng nếu không có. Không phải công cụ AI — code ghép ảnh vào slide."""
+    for seg in load_segments():
+        if seg["segment_id"] == segment_id:
+            return [n for n in seg.get("images") or [] if os.path.isfile(os.path.join(IMAGES_DIR, n))]
+    return []
+
+
+def segments_of_buoi(buoi):
+    """Mọi đoạn bài giảng (không phải đoạn ngân hàng câu hỏi -Q) của một buổi, theo thứ tự trong tài liệu."""
+    pre = "D%02d-" % int(buoi)
+    return [dict(s) for s in load_segments() if s["segment_id"].startswith(pre) and "-Q" not in s["segment_id"]]
 
 
 def segment_exists(segment_id):

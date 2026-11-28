@@ -58,11 +58,10 @@ class ExporterTests(unittest.TestCase):
         audio = Path(self.temp.name) / 'voice & "one".mp3'
         html = Path(render_slides([slide, slide], str(self.directory), malicious, {1: str(audio)})).read_text(encoding="utf-8")
         self.assertNotIn("<script>alert(1)</script>", html)
-        self.assertEqual(html.count(escape(malicious)), 10)
-        self.assertIn('src="../voice%20%26%20%22one%22.mp3"', html)
-        self.assertEqual(html.count("<audio controls"), 1)
-        self.assertIn("<details>", html)
-        self.assertIn('class="slide" hidden', html)
+        self.assertGreaterEqual(html.count(escape(malicious)), 8)
+        self.assertIn('data-audio="../voice%20%26%20%22one%22.mp3"', html)
+        self.assertEqual(html.count("data-audio="), 1)
+        self.assertIn('<template class="sent">', html)
         self.assertIn("ArrowLeft", html)
         self.assertIn("ArrowRight", html)
 

@@ -3,7 +3,15 @@
 Chạy:  python -m uvicorn api:app --app-dir codebase --port 8000
 Biến môi trường tuỳ chọn: CORS_ORIGINS (danh sách origin, cách nhau bằng dấu phẩy; mặc định "*" khi phát triển).
 
-Vòng đời một bản nháp (KHÔNG có endpoint xuất bản / gửi học viên — chỉ giảng viên tự xuất bản bên ngoài hệ thống):
+LUỒNG CHÍNH (không có bước duyệt): tải tài liệu lên → tạo slide → tạo quiz → tải về.
+    POST /api/kho/upload                 nạp PDF / DOCX / PPTX / TXT: trích chữ + ẢNH, cắt đoạn nguồn
+    POST /api/jobs/deck                  tạo slide (nội dung + ảnh tài liệu + giọng đọc + HTML/PPTX)  → job_id
+    POST /api/jobs/quiz                  tạo quiz trắc nghiệm + 2 PDF (đề, đáp án)                     → job_id
+    GET  /api/jobs/{job_id}              tiến trình từng bước thật; xong thì có draft_id
+    GET  /api/drafts/{id}/files/{name}   tải file (slides_html, slides_pptx, bundle_zip, exam_pdf, answer_pdf, audio_N)
+Các endpoint cũ bên dưới (cổng 1 / cổng 2 / submit) giữ lại cho tương thích, giao diện mới không dùng.
+
+Vòng đời một bản nháp cũ (KHÔNG có endpoint xuất bản / gửi học viên — chỉ giảng viên tự xuất bản bên ngoài hệ thống):
     POST /api/drafts                     sinh quiz hoặc slide (đã tự kiểm)            stage = cong_1
     POST /api/drafts/{id}/gate1          giảng viên chấp nhận / từ chối / sửa từng mục  (mục sửa được kiểm lại)
     POST /api/drafts/{id}/build          dựng PDF quiz hoặc slide HTML + giọng đọc     stage = cong_2
@@ -21,6 +29,8 @@ import sys
 import threading
 import time
 import uuid
+import zipfile
+from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -33,6 +43,7 @@ from pydantic import BaseModel
 import agent
 import exporters
 import ingest
+import pptx_export
 import tools
 import tracing
 from tools import available_sessions
@@ -530,8 +541,7 @@ def synthesize_draft_voice(draft_id: str, body: VoiceBody):
 
     d["_voice_used"] = (voice, rate)
     if "slides_html" in files:
-        audio = {int(k.split("_")[1]): v for k, v in files.items() if k.startswith("audio_") and os.path.isfile(v)}
-        files["slides_html"] = exporters.render_slides(items, out, "Slide buổi %d — %s" % (d["buoi"], d["chu_de"]), audio, opts)
+        _rebuild_deck_files(d)
     _save_state()
     return {"draft": _public(d), "kiem_lai_giong_doc": voice_check}
 
@@ -569,7 +579,10 @@ def kho():
         cur = [s for s in segs if "bản cũ" not in s["session"]] or segs      # đoạn bản cũ không tính vào ngày cập nhật
         out.append({"buoi": buoi, "ten": re.sub(r"\s*\(bản cũ\)", "", cur[0]["session"]), "so_doan": len(segs),
                     "cap_nhat": max(s["updated_date"] for s in cur), "co_ban_cu": len(cur) != len(segs),
-                    "doan": [s["segment_id"] for s in segs], "tai_len": buoi >= 10})
+                    "doan": [s["segment_id"] for s in segs], "tai_len": buoi >= 10,
+                    "anh": [n for s in segs for n in (s.get("images") or [])],
+                    "so_ky_tu": sum(len(s["full_text"]) for s in segs),
+                    "xem_truoc": cur[0]["full_text"][:260]})
     return sorted(out, key=lambda x: x["buoi"])
 
 
@@ -592,10 +605,32 @@ def kho_upload(body: UploadBody):
         text = ingest.extract_text(body.filename, raw)
         buoi = body.buoi if body.buoi is not None else tools.next_upload_buoi()
         segs = ingest.build_segments(title, text, buoi, datetime.date.today().isoformat())
+        images = ingest.extract_images(body.filename, raw)
+        os.makedirs(tools.IMAGES_DIR, exist_ok=True)
+        for seg, im in ingest.attach_images(segs, images):
+            seg.setdefault("images", [])
+            name = "%s-I%02d.%s" % (seg["segment_id"], len(seg["images"]) + 1, im["ext"])
+            with open(os.path.join(tools.IMAGES_DIR, name), "wb") as f:
+                f.write(im["data"])
+            seg["images"].append(name)
+        tools.remove_upload(buoi)          # nạp lại cùng số buổi thì dọn ảnh cũ
         tools.add_upload(segs)
     except ValueError as exc:
         raise HTTPException(422, str(exc))
-    return {"buoi": buoi, "ten": segs[0]["session"], "so_doan": len(segs), "doan": [s["segment_id"] for s in segs]}
+    names = [n for sg in segs for n in sg.get("images", [])]
+    return {"buoi": buoi, "ten": segs[0]["session"], "so_doan": len(segs), "doan": [s["segment_id"] for s in segs],
+            "so_anh": len(names), "anh": names}
+
+
+@app.get("/api/images/{name}")
+def get_image(name: str):
+    """Ảnh đã trích từ tài liệu nạp (tên dạng D10-S02-I01.jpg)."""
+    if not re.fullmatch(r"D\d{2}-S\d{2,3}-I\d{2,3}\.(jpg|png)", name):
+        raise HTTPException(404, "không có ảnh")
+    path = os.path.join(tools.IMAGES_DIR, name)
+    if not os.path.isfile(path):
+        raise HTTPException(404, "không có ảnh")
+    return FileResponse(path)
 
 
 @app.delete("/api/kho/{buoi}")
@@ -776,8 +811,295 @@ def script_submit(script_id: str):
     return _script_public(sc)
 
 
+# ------------------------------------------------------------ luồng chính: tạo slide / quiz (không duyệt)
+
+JOBS = {}
+VOICE_SAMPLE = "Xin chào, đây là giọng đọc thuyết trình của bạn. Bài giảng sẽ được đọc rõ ràng, tự nhiên và dễ nghe."
+SLIDE_STEPS = [("doc", "Đọc tài liệu & chọn đoạn nguồn"), ("viet", "AI soạn slide và tự kiểm với nguồn"),
+               ("anh", "Chọn ảnh minh hoạ từ tài liệu"), ("giong", "Thu giọng đọc thuyết trình"),
+               ("dung", "Dựng bản trình chiếu, PPTX và gói tải về")]
+QUIZ_STEPS = [("doc", "Đọc tài liệu & chọn đoạn nguồn"), ("viet", "AI soạn câu hỏi và tự kiểm với nguồn"),
+              ("dung", "Xuất PDF đề thi và PDF đáp án")]
+
+
+class DeckJob(BaseModel):
+    buoi: int
+    chu_de: str = ""
+    so_luong: int = 6
+    mau: str = "Học thuật"
+    voice: str = "vi-VN-HoaiMyNeural"
+    rate: str = "+0%"
+    dung_anh: bool = True            # chèn ảnh trích từ tài liệu vào slide
+    co_giong: bool = True            # thu giọng đọc
+
+
+class QuizJob(BaseModel):
+    buoi: int
+    chu_de: str = ""
+    so_luong: int = 8
+
+
+def _job_new(kind, steps):
+    jid = "job-" + uuid.uuid4().hex[:8]
+    JOBS[jid] = {"job_id": jid, "kind": kind, "status": "running", "t0": time.time(), "error": None, "draft_id": None,
+                 "steps": [{"id": i, "label": l, "state": "pending", "detail": "", "t0": None, "t1": None} for i, l in steps],
+                 "preview": [], "done": 0, "total": 0}
+    return JOBS[jid]
+
+
+def _step(job, sid, state, detail=None):
+    for st in job["steps"]:
+        if st["id"] == sid:
+            st["state"] = state
+            if detail is not None:
+                st["detail"] = detail
+            if state == "active" and not st["t0"]:
+                st["t0"] = time.time()
+            if state in ("done", "error"):
+                st["t1"] = time.time()
+
+
+def _live_detail():
+    """Chi tiết thật của bước 'viet': đếm số lượt gọi model đang chạy trong khung trace."""
+    n = len([e for e in list(tracing._case.get("events") or []) if e.get("kind") == "model"])
+    if agent.PROGRESS["of"] > 1:
+        return "Tài liệu dài: đang xử lý phần %d/%d (soạn rồi tự kiểm từng phần)…" % (agent.PROGRESS["batch"], agent.PROGRESS["of"])
+    return ("Đang soạn nội dung từ đoạn nguồn…" if n <= 1 else
+            "Đang tự kiểm từng ý với đoạn nguồn…" if n == 2 else "Phát hiện chỗ lệch nguồn — đang soạn lại bản chuẩn hơn…")
+
+
+def _assign_images(items, enable=True):
+    """Gắn ảnh của tài liệu vào slide: ưu tiên ảnh của đúng đoạn nguồn; slide chưa có ảnh nhận ảnh còn dư gần nhất. Mỗi ảnh dùng một lần."""
+    for it in items:
+        it["hinh_anh"] = []
+    if not enable:
+        return 0
+    by_seg = {}
+    for it in items:
+        sid = it.get("segment_id", "")
+        if sid and sid not in by_seg:
+            by_seg[sid] = tools.get_segment_images(sid)
+    used = set()
+    for it in items:
+        for n in by_seg.get(it.get("segment_id", ""), []):
+            if n not in used:
+                it["hinh_anh"] = [n]
+                used.add(n)
+                break
+    buoi = {sid[1:3] for sid in by_seg if sid}
+    spare = []
+    for sg in tools.load_segments():
+        if sg["segment_id"][1:3] in buoi:
+            spare += [(sg["segment_id"], n) for n in tools.get_segment_images(sg["segment_id"]) if n not in used]
+
+    def num(sid):
+        m = re.search(r"-S(\d+)", sid or "")
+        return int(m.group(1)) if m else 0
+    for it in items:
+        if not it["hinh_anh"] and spare:
+            best = min(spare, key=lambda x: abs(num(x[0]) - num(it.get("segment_id", ""))))
+            if abs(num(best[0]) - num(it.get("segment_id", ""))) <= 3:     # chỉ nhận ảnh cùng khu vực, không ghép ảnh lạc đề
+                it["hinh_anh"] = [best[1]]
+                spare.remove(best)
+    return sum(len(it["hinh_anh"]) for it in items)
+
+
+def _deck_options(d):
+    return dict(d["options"], image_dir=tools.IMAGES_DIR)
+
+
+def _rebuild_deck_files(d):
+    """Dựng lại slides.html + slides.pptx + gói zip từ nội dung và giọng đọc hiện có của bản nháp."""
+    out = os.path.join(DRAFT_DIR, d["draft_id"])
+    files = d.setdefault("files", {})
+    audio = {int(k.split("_")[1]): v for k, v in files.items() if k.startswith("audio_") and os.path.isfile(v)}
+    title = d.get("tieu_de") or "Slide buổi %d — %s" % (d["buoi"], d["chu_de"])
+    opts = _deck_options(d)
+    files["slides_html"] = exporters.render_slides(d["items"], out, title, audio, opts)
+    try:
+        files["slides_pptx"] = pptx_export.export_pptx(d["items"], out, title, opts)
+    except Exception as exc:       # PPTX lỗi không làm hỏng bản HTML
+        d["pptx_error"] = str(exc)
+    zpath = os.path.join(out, "slides_bundle.zip")
+    with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED) as z:
+        z.write(files["slides_html"], "slides.html")
+        for p in audio.values():
+            z.write(p, os.path.basename(p))
+        if files.get("slides_pptx"):
+            z.write(files["slides_pptx"], "slides.pptx")
+    files["bundle_zip"] = zpath
+
+
+def _est_minutes(items):
+    words = sum(len(str(i.get("loi_thuyet_trinh", "")).split()) for i in items)
+    return max(1, round(words / 2.6 / 60))
+
+
+def _fail(job, exc):
+    job["status"], job["error"] = "error", str(exc)
+    for st in job["steps"]:
+        if st["state"] == "active":
+            _step(job, st["id"], "error", str(exc)[:300])
+
+
+def _run_deck(job, body):
+    try:
+        segs = tools.segments_of_buoi(body.buoi)
+        _step(job, "doc", "active")
+        if not segs:
+            raise RuntimeError("Kho chưa có tài liệu của buổi %d." % body.buoi)
+        n_img = sum(len(s.get("images") or []) for s in segs)
+        _step(job, "doc", "done", "%d đoạn nguồn · %d ảnh trong tài liệu" % (len(segs), n_img))
+        _step(job, "viet", "active", "Đang soạn nội dung từ đoạn nguồn…")
+        n = max(1, body.so_luong)
+        res, trace = _traced("tạo slide", agent.create_from_doc, "slide", body.buoi, n, body.chu_de)
+        data = res.get("data", {})
+        if data.get("status") != "cho_duyet":
+            raise RuntimeError(res["output"])
+        items = data["items"]
+        job["preview"] = [{"tieu_de": it.get("tieu_de", ""), "segment_id": it.get("segment_id", "")} for it in items]
+        labels = data.get("nhan", [])
+        ok = sum(1 for c in labels if c.get("nhan") == "KHOP_NGUON")
+        _step(job, "viet", "done", "%d slide · %d/%d ý khớp nguồn" % (len(items), ok, len(labels)))
+        _step(job, "anh", "active")
+        k = _assign_images(items, body.dung_anh)
+        _step(job, "anh", "done", ("Đã chọn %d ảnh minh hoạ từ tài liệu" % k) if k else
+              ("Tài liệu không có ảnh dùng được — dùng bố cục chữ" if body.dung_anh else "Đã tắt ảnh minh hoạ"))
+        draft_id = "draft-" + uuid.uuid4().hex[:8]
+        voice = body.voice if body.voice in exporters.ALLOWED_VOICES else "vi-VN-HoaiMyNeural"
+        rate = body.rate if body.rate in exporters.ALLOWED_RATES else "+0%"
+        title = body.chu_de.strip() or data.get("chu_de") or "Bài giảng"
+        opts = {"mau": body.mau, "voice": voice, "rate": rate, "ghi_chu": True, "dung_anh": body.dung_anh,
+                "nguon": {s["segment_id"]: s["source_title"] for s in segs},
+                "meta": ["Buổi %d" % body.buoi, "%d slide" % len(items), "≈ %d phút" % _est_minutes(items)]}
+        d = {"draft_id": draft_id, "kind": "slide", "buoi": body.buoi, "chu_de": title, "tieu_de": title, "script_id": None,
+             "options": opts, "items": items, "nhan": labels, "stage": "xong", "status": "xong",
+             "files": {}, "audio_ts": {}, "voice_segments": {str(i): _build_voice_meta(it, None) for i, it in enumerate(items, 1)},
+             "message": res["output"], "traces": [trace], "audio_errors": {},
+             "created_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}
+        DRAFTS[draft_id] = d
+        out = os.path.join(DRAFT_DIR, draft_id)
+        if body.co_giong:
+            _step(job, "giong", "active", "0/%d slide" % len(items))
+            job["total"], job["done"] = len(items), 0
+
+            def one(i):
+                try:
+                    d["files"]["audio_%d" % i] = exporters.synthesize_voice(i, items[i - 1]["loi_thuyet_trinh"], out, voice=voice, rate=rate)
+                    d["audio_ts"][str(i)] = int(time.time() * 1000)
+                except Exception as exc:
+                    d["audio_errors"][str(i)] = str(exc)
+                job["done"] += 1
+                _step(job, "giong", "active", "%d/%d slide" % (job["done"], len(items)))
+            with ThreadPoolExecutor(max_workers=2) as ex:
+                list(ex.map(one, range(1, len(items) + 1)))
+            miss = len(d["audio_errors"])
+            _step(job, "giong", "done", ("Đã thu giọng %d slide" % (len(items) - miss)) +
+                  (" · %d slide lỗi mạng, bản trình chiếu tự dùng giọng trình duyệt" % miss if miss else ""))
+        else:
+            _step(job, "giong", "done", "Đã tắt giọng đọc")
+        d["_voice_used"] = [voice, rate]
+        _step(job, "dung", "active")
+        _rebuild_deck_files(d)
+        _save_state()
+        _step(job, "dung", "done", "Sẵn sàng trình chiếu và tải về" + (" (PPTX lỗi: %s)" % d["pptx_error"] if d.get("pptx_error") else ""))
+        job["draft_id"], job["status"] = draft_id, "done"
+    except Exception as exc:
+        _fail(job, exc)
+
+
+def _run_quiz(job, body):
+    try:
+        segs = tools.segments_of_buoi(body.buoi)
+        _step(job, "doc", "active")
+        if not segs:
+            raise RuntimeError("Kho chưa có tài liệu của buổi %d." % body.buoi)
+        _step(job, "doc", "done", "%d đoạn nguồn" % len(segs))
+        _step(job, "viet", "active", "Đang soạn nội dung từ đoạn nguồn…")
+        n = max(1, body.so_luong)
+        res, trace = _traced("tạo quiz", agent.create_from_doc, "quiz", body.buoi, n, body.chu_de)
+        data = res.get("data", {})
+        if data.get("status") != "cho_duyet":
+            raise RuntimeError(res["output"])
+        items = data["items"]
+        labels = data.get("nhan", [])
+        ok = sum(1 for c in labels if c.get("nhan") == "KHOP_NGUON")
+        job["preview"] = [{"tieu_de": it.get("de", ""), "segment_id": it.get("segment_id", "")} for it in items]
+        _step(job, "viet", "done", "%d câu · %d/%d khớp nguồn" % (len(items), ok, len(labels)))
+        _step(job, "dung", "active")
+        title = body.chu_de.strip() or data.get("chu_de") or "Quiz"
+        draft_id = "draft-" + uuid.uuid4().hex[:8]
+        files = exporters.export_quiz_pdf(items, os.path.join(DRAFT_DIR, draft_id), "Quiz buổi %d — %s" % (body.buoi, title))
+        DRAFTS[draft_id] = {"draft_id": draft_id, "kind": "quiz", "buoi": body.buoi, "chu_de": title, "script_id": None,
+                            "options": {}, "items": items, "nhan": labels, "stage": "xong", "status": "xong",
+                            "files": files, "audio_ts": {}, "voice_segments": {}, "message": res["output"], "traces": [trace],
+                            "created_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}
+        _save_state()
+        _step(job, "dung", "done", "Đề thi và đáp án sẵn sàng")
+        job["draft_id"], job["status"] = draft_id, "done"
+    except Exception as exc:
+        _fail(job, exc)
+
+
+def _start(kind, steps, runner, body):
+    if any(j["status"] == "running" for j in JOBS.values()):
+        raise HTTPException(409, "đang có một tác vụ chạy, đợi xong rồi tạo tiếp")
+    job = _job_new(kind, steps)
+    threading.Thread(target=runner, args=(job, body), daemon=True).start()
+    return {"job_id": job["job_id"]}
+
+
+@app.post("/api/jobs/deck")
+def job_deck(body: DeckJob):
+    if body.buoi not in available_sessions():
+        raise HTTPException(422, "kho chưa có buổi %d — hãy tải tài liệu lên trước" % body.buoi)
+    return _start("deck", SLIDE_STEPS, _run_deck, body)
+
+
+@app.post("/api/jobs/quiz")
+def job_quiz(body: QuizJob):
+    if body.buoi not in available_sessions():
+        raise HTTPException(422, "kho chưa có buổi %d — hãy tải tài liệu lên trước" % body.buoi)
+    return _start("quiz", QUIZ_STEPS, _run_quiz, body)
+
+
+@app.get("/api/jobs/{job_id}")
+def job_status(job_id: str):
+    job = JOBS.get(job_id)
+    if not job:
+        raise HTTPException(404, "không có tác vụ %s" % job_id)
+    out = dict(job, elapsed_s=round(time.time() - job["t0"], 1))
+    out["steps"] = [dict(st) for st in job["steps"]]
+    if job["status"] == "running":
+        for st in out["steps"]:
+            if st["id"] == "viet" and st["state"] == "active":
+                st["detail"] = _live_detail()
+    if job["draft_id"]:
+        out["draft"] = _public(DRAFTS[job["draft_id"]])
+    return out
+
+
+@app.get("/api/voice/preview")
+def voice_preview(voice: str = "vi-VN-HoaiMyNeural", rate: str = "+0%"):
+    """Nghe thử giọng đọc (đoạn mẫu ngắn, lưu đệm theo giọng + tốc độ)."""
+    if voice not in exporters.ALLOWED_VOICES or rate not in exporters.ALLOWED_RATES:
+        raise HTTPException(422, "giọng hoặc tốc độ không hợp lệ")
+    out = os.path.join(DRAFT_DIR, "_preview", "%s_%s" % (voice, rate.replace("%", "p").replace("+", "n").replace("-", "m")))
+    path = os.path.join(out, "slide_1.mp3")
+    if not os.path.isfile(path):
+        try:
+            exporters.synthesize_voice(1, VOICE_SAMPLE, out, voice=voice, rate=rate)
+        except RuntimeError as exc:
+            raise HTTPException(502, str(exc))
+    return FileResponse(path, media_type="audio/mpeg")
+
+
+_DL_NAMES = {"slides_html": "slides.html", "slides_pptx": "slides.pptx", "bundle_zip": "slides_bundle.zip",
+             "exam_pdf": "quiz_de_thi.pdf", "answer_pdf": "quiz_dap_an.pdf"}
+
+
 @app.get("/api/drafts/{draft_id}/files/{name}")
-def download(draft_id: str, name: str):
+def download(draft_id: str, name: str, dl: int = 0):
     d = _get(draft_id)
     path = d["files"].get(name)
     if not path:    # cũng cho tải theo tên file thật (vd slide_1.mp3, vì HTML slide tham chiếu audio theo tên này)
@@ -787,6 +1109,8 @@ def download(draft_id: str, name: str):
     root = os.path.realpath(os.path.join(DRAFT_DIR, draft_id))
     if not os.path.realpath(path).startswith(root):
         raise HTTPException(403, "ngoài thư mục bản nháp")
+    if dl:
+        return FileResponse(path, filename=_DL_NAMES.get(name, os.path.basename(path)))
     return FileResponse(path)
 
 
